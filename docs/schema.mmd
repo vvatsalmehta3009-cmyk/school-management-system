@@ -1,0 +1,160 @@
+erDiagram
+    schools ||--o{ school_memberships : "has"
+    schools ||--o{ academic_years : "defines"
+    schools ||--o{ classes : "offers"
+    schools ||--o{ subjects : "offers"
+    academic_years ||--o{ sections : "contains"
+    classes ||--o{ sections : "divided_into"
+    school_memberships ||--o{ sections : "class_teacher_of"
+    sections ||--o{ section_subject_teachers : "has"
+    subjects ||--o{ section_subject_teachers : "taught_in"
+    school_memberships ||--o{ section_subject_teachers : "assigned_to"
+    schools ||--o{ students : "admits"
+    users ||--o| students : "optional_login"
+    students ||--o{ student_enrollments : "placed_in"
+    sections ||--o{ student_enrollments : "contains"
+    academic_years ||--o{ student_enrollments : "during"
+    users ||--o{ school_memberships : "holds"
+    school_memberships ||--o{ user_roles : "assigned"
+    roles ||--o{ user_roles : "granted_via"
+    roles ||--o{ role_permissions : "has"
+    permissions ||--o{ role_permissions : "included_in"
+
+    schools {
+        bigint id PK
+        varchar name
+        varchar code "UK"
+        varchar email
+        varchar phone
+        text address
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    academic_years {
+        bigint id PK
+        bigint school_id FK
+        varchar name
+        date start_date
+        date end_date
+        boolean is_current
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    classes {
+        bigint id PK
+        bigint school_id FK
+        varchar name
+        int display_order
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    sections {
+        bigint id PK
+        bigint academic_year_id FK
+        bigint class_id FK
+        varchar name
+        int capacity
+        bigint class_teacher_membership_id FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    subjects {
+        bigint id PK
+        bigint school_id FK
+        varchar name
+        varchar code "UK"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    section_subject_teachers {
+        bigint id PK
+        bigint section_id FK
+        bigint subject_id FK
+        bigint teacher_membership_id FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    users {
+        bigint id PK
+        varchar full_name
+        varchar email
+        varchar phone
+        text password_hash
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    school_memberships {
+        bigint id PK
+        bigint user_id FK
+        bigint school_id FK
+        varchar school_user_code "UK"
+        varchar status
+        timestamptz joined_at
+        timestamptz left_at
+        timestamptz created_at
+    }
+
+    roles {
+        bigint id PK
+        varchar name "UK"
+        text description
+        timestamptz created_at
+    }
+
+    permissions {
+        bigint id PK
+        varchar code "UK"
+        text description
+        timestamptz created_at
+    }
+
+    students {
+        bigint id PK
+        bigint school_id FK
+        bigint user_id FK
+        varchar admission_number "UK"
+        varchar first_name
+        varchar last_name
+        date date_of_birth
+        varchar gender
+        varchar blood_group
+        date admission_date
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    student_enrollments {
+        bigint id PK
+        bigint student_id FK
+        bigint section_id FK
+        bigint academic_year_id FK
+        varchar roll_number
+        date enrolled_at
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_roles {
+        bigint id PK
+        bigint school_membership_id FK
+        bigint role_id FK
+        timestamptz created_at
+    }
+
+    role_permissions {
+        bigint id PK
+        bigint role_id FK
+        bigint permission_id FK
+        timestamptz created_at
+    }
