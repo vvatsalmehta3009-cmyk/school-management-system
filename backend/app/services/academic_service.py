@@ -2,9 +2,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.academic import AcademicYear, SchoolClass, Section
+from app.models.academic import AcademicYear, SchoolClass, Section, Subject
 from app.models.membership import SchoolMembership
-from app.schemas.academic import ClassCreate, SectionCreate
+from app.schemas.academic import ClassCreate, SectionCreate, SubjectCreate
 
 
 class AcademicService:
@@ -216,3 +216,43 @@ class AcademicService:
         self.db.commit()
         self.db.refresh(new_section)
         return new_section
+
+    # ------------------------------------------------------------------
+    # Subjects (Master Curriculum Catalog)
+    # ------------------------------------------------------------------
+
+    def list_subjects(self, school_id: int) -> list[Subject]:
+        """Fetch all master subjects for a school."""
+        query = (
+            select(Subject)
+            .where(Subject.school_id == school_id)
+            .order_by(Subject.name.asc())
+        )
+        return list(self.db.scalars(query).all())
+
+    def create_subject(self, school_id: int, data: SubjectCreate) -> Subject:
+        """Create a master subject for the school."""
+        clean_code = data.code.strip().upper()
+        existing = self.db.scalars(
+            select(Subject).where(
+                Subject.school_id == school_id,
+                Subject.code == clean_code
+            )
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Subject with code '{clean_code}' already exists in your school."
+            )
+
+        new_subject = Subject(
+            school_id=school_id,
+            name=data.name.strip(),
+            code=clean_code
+        )
+        self.db.add(new_subject)
+        self.db.commit()
+        self.db.refresh(new_subject)
+        return new_subject
+

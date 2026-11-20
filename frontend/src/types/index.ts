@@ -78,6 +78,14 @@ export interface ClassItem {
   created_at: string;
 }
 
+export interface SubjectItem {
+  id: number;
+  school_id: number;
+  name: string;
+  code: string;
+  created_at: string;
+}
+
 export interface SectionItem {
   id: number;
   academic_year_id: number;

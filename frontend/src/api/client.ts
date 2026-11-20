@@ -6,6 +6,7 @@ import type {
   AcademicYear,
   ClassItem,
   SectionItem,
+  SubjectItem,
   MembershipContext,
   RoleItem,
   UserMember,
@@ -178,6 +179,20 @@ class ApiClient {
     class_teacher_membership_id?: number;
   }): Promise<SectionItem> {
     return this.request<SectionItem>("/academic/sections", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async getSubjects(): Promise<SubjectItem[]> {
+    return this.request<SubjectItem[]>("/academic/subjects");
+  }
+
+  public async createSubject(payload: {
+    name: string;
+    code: string;
+  }): Promise<SubjectItem> {
+    return this.request<SubjectItem>("/academic/subjects", {
       method: "POST",
       body: JSON.stringify(payload),
     });

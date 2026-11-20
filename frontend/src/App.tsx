@@ -3,7 +3,7 @@ import { api } from "./api/client";
 import type { UserProfile } from "./types";
 import { Header } from "./components/Header";
 import { AppGrid } from "./components/AppGrid";
-import { AcademicApp } from "./components/AcademicApp";
+import { AcademicApp, type AcademicSidebarTab } from "./components/AcademicApp";
 import { UsersApp } from "./components/UsersApp";
 import { LoginView } from "./components/LoginView";
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -13,6 +13,7 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [schoolName, setSchoolName] = useState<string>("");
   const [activeApp, setActiveApp] = useState<string>("grid");
+  const [academicTab, setAcademicTab] = useState<AcademicSidebarTab>("sections-tree");
   const [showOnboardModal, setShowOnboardModal] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -47,6 +48,18 @@ export const App: React.FC = () => {
     setUser(null);
     setSchoolName("");
     setActiveApp("grid");
+  };
+
+  const handleOpenApp = (appId: string) => {
+    if (appId === "subjects") {
+      setAcademicTab("subjects");
+      setActiveApp("academic");
+    } else {
+      if (appId === "academic") {
+        setAcademicTab("sections-tree");
+      }
+      setActiveApp(appId);
+    }
   };
 
   if (loading) {
@@ -92,7 +105,7 @@ export const App: React.FC = () => {
         {activeApp === "grid" && (
           <AppGrid
             user={user}
-            onOpenApp={(appId) => setActiveApp(appId)}
+            onOpenApp={handleOpenApp}
             onOpenOnboardModal={() => setShowOnboardModal(true)}
           />
         )}
@@ -100,6 +113,7 @@ export const App: React.FC = () => {
         {activeApp === "academic" && (
           <AcademicApp
             user={user}
+            initialTab={academicTab}
             onBack={() => setActiveApp("grid")}
           />
         )}

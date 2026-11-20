@@ -11,6 +11,8 @@ from app.schemas.academic import (
     ClassResponse,
     SectionCreate,
     SectionResponse,
+    SubjectCreate,
+    SubjectResponse,
 )
 from app.services.academic_service import AcademicService
 
@@ -130,3 +132,40 @@ def create_section(
 ) -> SectionResponse:
     service = AcademicService(db)
     return service.create_section(school_id=current_membership.school_id, data=data)
+
+
+# ----------------------------------------------------------------------
+# Subjects (Master Curriculum Catalog)
+# ----------------------------------------------------------------------
+
+@router.get(
+    "/subjects",
+    response_model=list[SubjectResponse],
+    summary="List Subjects",
+    description="Fetch all master curriculum subjects for the active school.",
+    dependencies=[Depends(PermissionChecker("academic.view"))]
+)
+def list_subjects(
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> list[SubjectResponse]:
+    service = AcademicService(db)
+    return service.list_subjects(school_id=current_membership.school_id)
+
+
+@router.post(
+    "/subjects",
+    response_model=SubjectResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Subject",
+    description="Create a new master curriculum subject for the active school.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def create_subject(
+    data: SubjectCreate,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> SubjectResponse:
+    service = AcademicService(db)
+    return service.create_subject(school_id=current_membership.school_id, data=data)
+

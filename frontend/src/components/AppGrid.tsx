@@ -79,7 +79,7 @@ export const AppGrid: React.FC<AppGridProps> = ({
       tagline: "Master curriculum subjects, course codes & syllabus",
       icon: BookOpen,
       requiredPermission: "academic.view",
-      status: "PLANNED",
+      status: "ACTIVE",
       color: "from-cyan-600 to-blue-600",
     },
     {

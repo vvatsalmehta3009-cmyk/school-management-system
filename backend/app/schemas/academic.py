@@ -63,3 +63,22 @@ class AcademicYearResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SubjectCreate(BaseModel):
+    """Payload to create a master subject."""
+    name: str = Field(..., min_length=1, max_length=100, example="Mathematics")
+    code: str = Field(..., min_length=1, max_length=20, example="MATH101")
+
+
+class SubjectResponse(BaseModel):
+    """Output representation of a master subject."""
+    id: int
+    school_id: int
+    name: str
+    code: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
