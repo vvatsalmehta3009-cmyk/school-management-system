@@ -68,7 +68,7 @@ def get_me(
         school_user_code=school_user_code,
         roles=current_membership.roles,
         permissions=current_membership.permissions,
-        must_change_password=current_membership.must_change_password,
+        must_change_password=bool(user.must_change_password) if user else False,
         is_super_admin=current_membership.is_super_admin,
     )
 
