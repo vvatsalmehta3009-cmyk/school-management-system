@@ -113,6 +113,10 @@ export const AppGrid: React.FC<AppGridProps> = ({
 
   // RBAC Permission Check: Super Admin and School Admin have full access; others checked against atomic permissions
   const hasAccess = (tile: AppTile) => {
+    // School Onboarding is strictly a Platform / Code Admin privilege (not granted to Principal or regular tenant staff)
+    if (tile.id === "onboarding") {
+      return Boolean(user.is_super_admin || user.roles.includes("Super Admin"));
+    }
     if (!tile.requiredPermission) return true;
     if (user.is_super_admin) return true;
     if (user.roles.includes("School Admin") || user.roles.includes("Super Admin")) return true;
