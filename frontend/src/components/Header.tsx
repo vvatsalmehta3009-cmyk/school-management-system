@@ -20,6 +20,15 @@ interface HeaderProps {
   onSchoolChange?: (newProfile: UserProfile, newSchoolName: string) => void;
 }
 
+const getInitials = (name?: string) => {
+  if (!name || !name.trim()) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return name.trim().slice(0, 2).toUpperCase();
+};
+
 export const Header: React.FC<HeaderProps> = ({
   user,
   schoolName,
@@ -198,10 +207,10 @@ export const Header: React.FC<HeaderProps> = ({
               /* Regular School Admin / Teacher / Student -> Clean Static Display */
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-900 text-sm sm:text-base">
-                    {schoolName || user.school_code}
+                  <span className="font-bold text-slate-900 text-sm sm:text-base truncate max-w-[200px] sm:max-w-xs">
+                    {schoolName || user.school_name || user.school_code}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
                     {user.school_code}
                   </span>
                 </div>
@@ -216,10 +225,10 @@ export const Header: React.FC<HeaderProps> = ({
           {/* School User Identity Card (User Name & School User Code) */}
           <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
             <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0">
-              {(user.full_name || "U").trim().charAt(0)}
+              {getInitials(user.full_name)}
             </div>
             <div className="text-left leading-tight">
-              <div className="font-bold text-xs text-slate-900 truncate max-w-[110px] sm:max-w-[160px]">
+              <div className="font-bold text-xs text-slate-900 truncate max-w-[130px] sm:max-w-[200px]">
                 {user.full_name || "School User"}
               </div>
               <div className="font-mono text-[10px] text-indigo-700 font-semibold truncate">

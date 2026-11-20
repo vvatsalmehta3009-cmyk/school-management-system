@@ -1,9 +1,12 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.dependencies import AuthenticatedMembership, get_current_membership
+from app.models.membership import SchoolMembership
+from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -11,6 +14,7 @@ from app.schemas.auth import (
     MembershipContextResponse,
     SwitchContextRequest,
     TokenResponse,
+    UserMeResponse,
 )
 from app.services.auth_service import AuthService
 
@@ -34,13 +38,39 @@ def login(
 
 @router.get(
     "/me",
+    response_model=UserMeResponse,
     summary="Get Current User Profile & Active Context",
-    description="Returns the currently authenticated user's ID, active school, roles, and permissions."
+    description="Returns the currently authenticated user's ID, active school, roles, permissions, full name, and user code."
 )
 def get_me(
-    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)]
-) -> AuthenticatedMembership:
-    return current_membership
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> UserMeResponse:
+    # Always resolve accurate full_name, school_user_code, and school_name directly from DB
+    user = db.scalar(select(User).where(User.id == current_membership.user_id))
+    full_name = user.full_name if user and user.full_name else (current_membership.full_name or "School User")
+
+    membership = db.scalar(
+        select(SchoolMembership)
+        .where(SchoolMembership.id == current_membership.membership_id)
+        .options(selectinload(SchoolMembership.school))
+    )
+    school_user_code = membership.school_user_code if membership and membership.school_user_code else current_membership.school_user_code
+    school_name = membership.school.name if membership and membership.school else current_membership.school_code
+
+    return UserMeResponse(
+        user_id=current_membership.user_id,
+        membership_id=current_membership.membership_id,
+        school_id=current_membership.school_id,
+        school_code=current_membership.school_code,
+        school_name=school_name,
+        full_name=full_name,
+        school_user_code=school_user_code,
+        roles=current_membership.roles,
+        permissions=current_membership.permissions,
+        must_change_password=current_membership.must_change_password,
+        is_super_admin=current_membership.is_super_admin,
+    )
 
 
 @router.get(

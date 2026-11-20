@@ -26,6 +26,24 @@ class TokenResponse(BaseModel):
     is_super_admin: bool = False
 
 
+class UserMeResponse(BaseModel):
+    """Returned by GET /auth/me with complete profile and tenant context."""
+    user_id: int
+    membership_id: int
+    school_id: int
+    school_code: str
+    school_name: str
+    full_name: str
+    school_user_code: str | None = None
+    roles: list[str]
+    permissions: list[str]
+    must_change_password: bool = False
+    is_super_admin: bool = False
+
+    class Config:
+        from_attributes = True
+
+
 class ChangePasswordRequest(BaseModel):
     """Payload to update user password."""
     new_password: str = Field(..., min_length=6, description="New account password")

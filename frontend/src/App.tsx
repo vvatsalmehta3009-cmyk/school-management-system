@@ -25,7 +25,7 @@ export const App: React.FC = () => {
         try {
           const profile = await api.getMe();
           setUser(profile);
-          setSchoolName(profile.school_code);
+          setSchoolName(profile.school_name || profile.school_code);
         } catch {
           api.clearToken();
           setUser(null);
@@ -39,7 +39,7 @@ export const App: React.FC = () => {
 
   const handleLoginSuccess = (profile: UserProfile, name: string) => {
     setUser(profile);
-    setSchoolName(name || profile.school_code);
+    setSchoolName(name || profile.school_name || profile.school_code);
     setActiveApp("grid");
   };
 

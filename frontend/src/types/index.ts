@@ -3,6 +3,7 @@ export interface UserProfile {
   membership_id: number;
   school_id: number;
   school_code: string;
+  school_name?: string;
   full_name?: string;
   school_user_code?: string;
   roles: string[];
