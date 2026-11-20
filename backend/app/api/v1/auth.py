@@ -94,3 +94,35 @@ def change_password(
     return ChangePasswordResponse()
 
 
+@router.get(
+    "/platform/schools",
+    summary="List All Schools (Code Admin Only)",
+    description="Returns all schools registered in the platform for global Code / Super Admin navigation."
+)
+def list_platform_schools(
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+):
+    auth_service = AuthService(db)
+    return auth_service.list_platform_schools(user_id=current_membership.user_id)
+
+
+@router.post(
+    "/platform/enter-school/{school_id}",
+    response_model=TokenResponse,
+    summary="Enter School Context (Code Admin Only)",
+    description="Allows Code Admin to switch into ANY school tenant context instantly."
+)
+def enter_school(
+    school_id: int,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> TokenResponse:
+    auth_service = AuthService(db)
+    return auth_service.enter_school(
+        user_id=current_membership.user_id,
+        target_school_id=school_id
+    )
+
+
+

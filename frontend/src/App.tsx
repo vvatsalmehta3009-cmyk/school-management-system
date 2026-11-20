@@ -81,6 +81,11 @@ export const App: React.FC = () => {
         user={user}
         schoolName={schoolName}
         onLogout={handleLogout}
+        onSchoolChange={(newProfile, newName) => {
+          setUser(newProfile);
+          setSchoolName(newName || newProfile.school_code);
+          setActiveApp("grid");
+        }}
       />
 
       <main className="flex-1">

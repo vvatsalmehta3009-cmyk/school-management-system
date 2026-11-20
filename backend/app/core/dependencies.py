@@ -27,6 +27,7 @@ class AuthenticatedMembership:
     roles: list[str]
     permissions: list[str]
     must_change_password: bool = False
+    is_super_admin: bool = False
 
     def has_permission(self, permission_code: str) -> bool:
         """
@@ -110,7 +111,8 @@ class Authenticator:
                 school_code=str(school_code),
                 roles=roles,
                 permissions=permissions,
-                must_change_password=bool(payload.get("must_change_password", False))
+                must_change_password=bool(payload.get("must_change_password", False)),
+                is_super_admin=bool(payload.get("is_super_admin", False))
             )
 
         except jwt.ExpiredSignatureError:

@@ -11,6 +11,7 @@ import type {
   UserMember,
   CreateUserPayload,
   BulkUploadResponse,
+  PlatformSchool,
 } from "../types";
 
 const BASE_URL = "http://127.0.0.1:8000/api/v1";
@@ -97,6 +98,19 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ new_password }),
     });
+  }
+
+  // Platform (Code Admin)
+  public async getPlatformSchools(): Promise<PlatformSchool[]> {
+    return this.request<PlatformSchool[]>("/auth/platform/schools");
+  }
+
+  public async enterSchool(school_id: number): Promise<LoginResponse> {
+    const res = await this.request<LoginResponse>(`/auth/platform/enter-school/${school_id}`, {
+      method: "POST",
+    });
+    this.setToken(res.access_token);
+    return res;
   }
 
   // 2. Onboarding

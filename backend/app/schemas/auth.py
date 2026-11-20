@@ -22,6 +22,7 @@ class TokenResponse(BaseModel):
     roles: list[str]
     permissions: list[str]
     must_change_password: bool = False
+    is_super_admin: bool = False
 
 
 class ChangePasswordRequest(BaseModel):

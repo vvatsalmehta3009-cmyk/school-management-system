@@ -6,6 +6,7 @@ export interface UserProfile {
   roles: string[];
   permissions: string[];
   must_change_password?: boolean;
+  is_super_admin?: boolean;
 }
 
 export interface LoginResponse {
@@ -21,6 +22,17 @@ export interface LoginResponse {
   roles: string[];
   permissions: string[];
   must_change_password?: boolean;
+  is_super_admin?: boolean;
+}
+
+export interface PlatformSchool {
+  id: number;
+  name: string;
+  code: string;
+  email?: string | null;
+  phone?: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface SchoolOnboardingPayload {

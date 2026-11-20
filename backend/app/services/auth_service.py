@@ -155,6 +155,7 @@ class AuthService:
         roles, permissions = self._get_membership_roles_and_permissions(membership.id)
 
         # 8. Create JWT Access Token with embedded tenant context
+        is_super_admin = bool(getattr(user, "is_super_admin", False) or "Super Admin" in roles)
         claims = {
             "membership_id": membership.id,
             "school_id": membership.school_id,
@@ -162,6 +163,7 @@ class AuthService:
             "roles": roles,
             "permissions": permissions,
             "must_change_password": bool(user.must_change_password),
+            "is_super_admin": is_super_admin,
         }
         access_token = self.tokens.create_access_token(
             subject=user.id,
@@ -180,7 +182,8 @@ class AuthService:
             school_membership_id=membership.id,
             roles=roles,
             permissions=permissions,
-            must_change_password=bool(user.must_change_password)
+            must_change_password=bool(user.must_change_password),
+            is_super_admin=is_super_admin
         )
 
     def change_password(self, user_id: int, new_password: str) -> None:
@@ -265,6 +268,7 @@ class AuthService:
 
         roles, permissions = self._get_membership_roles_and_permissions(membership.id)
 
+        is_super_admin = bool(getattr(membership.user, "is_super_admin", False) or "Super Admin" in roles)
         claims = {
             "membership_id": membership.id,
             "school_id": membership.school_id,
@@ -272,6 +276,7 @@ class AuthService:
             "roles": roles,
             "permissions": permissions,
             "must_change_password": bool(membership.user.must_change_password),
+            "is_super_admin": is_super_admin,
         }
         access_token = self.tokens.create_access_token(
             subject=user_id,
@@ -290,6 +295,117 @@ class AuthService:
             school_membership_id=membership.id,
             roles=roles,
             permissions=permissions,
-            must_change_password=bool(membership.user.must_change_password)
+            must_change_password=bool(membership.user.must_change_password),
+            is_super_admin=is_super_admin
         )
+
+    def list_platform_schools(self, user_id: int) -> list[dict]:
+        """
+        Lists all schools registered on the platform. Accessible only by Code / Super Admin.
+        """
+        user = self.db.scalars(select(User).where(User.id == user_id)).first()
+        if not user or not user.is_super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Only Platform / Code Admin can view all schools."
+            )
+
+        schools = self.db.scalars(select(School).order_by(School.name.asc())).all()
+        return [
+            {
+                "id": s.id,
+                "name": s.name,
+                "code": s.code,
+                "email": s.email,
+                "phone": s.phone,
+                "is_active": s.is_active,
+                "created_at": s.created_at,
+            }
+            for s in schools
+        ]
+
+    def enter_school(self, user_id: int, target_school_id: int) -> TokenResponse:
+        """
+        Allows the Code / Super Admin to jump into ANY school context seamlessly.
+        """
+        user = self.db.scalars(select(User).where(User.id == user_id)).first()
+        if not user or not user.is_super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Only Platform / Code Admin can enter schools."
+            )
+
+        school = self.db.scalars(select(School).where(School.id == target_school_id)).first()
+        if not school:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"School #{target_school_id} not found."
+            )
+        if not school.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This school is currently deactivated."
+            )
+
+        membership = self.db.scalars(
+            select(SchoolMembership).where(
+                SchoolMembership.user_id == user.id,
+                SchoolMembership.school_id == school.id
+            )
+        ).first()
+
+        if not membership:
+            membership = SchoolMembership(
+                user_id=user.id,
+                school_id=school.id,
+                status="active"
+            )
+            self.db.add(membership)
+            self.db.flush()
+            clean_code = school.code.strip().upper()
+            membership.school_user_code = f"{clean_code}{str(membership.id).zfill(6)}"
+
+            admin_roles = self.db.scalars(
+                select(Role).where(Role.name.in_(["Super Admin", "School Admin"]))
+            ).all()
+            for r in admin_roles:
+                self.db.add(UserRole(school_membership_id=membership.id, role_id=r.id))
+            self.db.commit()
+
+        roles, permissions = self._get_membership_roles_and_permissions(membership.id)
+        if "Super Admin" not in roles:
+            roles.append("Super Admin")
+        if "*" not in permissions:
+            permissions.append("*")
+
+        claims = {
+            "membership_id": membership.id,
+            "school_id": school.id,
+            "school_code": school.code,
+            "roles": roles,
+            "permissions": permissions,
+            "must_change_password": False,
+            "is_super_admin": True,
+        }
+        access_token = self.tokens.create_access_token(
+            subject=user.id,
+            claims=claims
+        )
+
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user_id=user.id,
+            full_name=user.full_name,
+            school_id=school.id,
+            school_code=school.code,
+            school_name=school.name,
+            school_membership_id=membership.id,
+            roles=roles,
+            permissions=permissions,
+            must_change_password=False,
+            is_super_admin=True
+        )
+
 
