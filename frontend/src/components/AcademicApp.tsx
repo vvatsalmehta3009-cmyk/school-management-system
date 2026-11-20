@@ -13,6 +13,9 @@ import {
   Check,
   School,
   X,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 export type AcademicSidebarTab = "sections-tree" | "classes-master" | "subjects" | "years";
@@ -21,6 +24,13 @@ interface AcademicAppProps {
   user: UserProfile;
   onBack: () => void;
   initialTab?: AcademicSidebarTab;
+}
+
+interface DeleteTarget {
+  type: "class" | "section" | "subject" | "year";
+  id: number;
+  title: string;
+  subtitle?: string;
 }
 
 export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialTab = "sections-tree" }) => {
@@ -34,16 +44,38 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
   const [selectedYearId, setSelectedYearId] = useState<number>(0);
 
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Modals
+  // Creation Modals
   const [showSectionModal, setShowSectionModal] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showYearModal, setShowYearModal] = useState(false);
 
-  // Form states
+  // Edit Modals
+  const [editingSection, setEditingSection] = useState<SectionItem | null>(null);
+  const [editSectionForm, setEditSectionForm] = useState({ name: "", capacity: 40 });
+
+  const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+  const [editClassForm, setEditClassForm] = useState({ name: "", display_order: 1 });
+
+  const [editingSubject, setEditingSubject] = useState<SubjectItem | null>(null);
+  const [editSubjectForm, setEditSubjectForm] = useState({ name: "", code: "" });
+
+  const [editingYear, setEditingYear] = useState<AcademicYear | null>(null);
+  const [editYearForm, setEditYearForm] = useState({
+    name: "",
+    start_date: "",
+    end_date: "",
+    is_current: false,
+  });
+
+  // Delete Confirmation Modal
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
+  // Create Form states
   const [targetClassForSection, setTargetClassForSection] = useState<ClassItem | null>(null);
   const [newSection, setNewSection] = useState({
     name: "A",
@@ -106,7 +138,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
     loadData();
   }, []);
 
-  // Handlers
+  // Creation Handlers
   const handleOpenAddSection = (cls: ClassItem) => {
     setTargetClassForSection(cls);
     setNewSection({ name: "A", capacity: 40 });
@@ -116,6 +148,8 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
   const handleCreateSection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetClassForSection || !selectedYearId) return;
+    setActionLoading(true);
+    setError(null);
     try {
       await api.createSection({
         academic_year_id: selectedYearId,
@@ -125,14 +159,18 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
       });
       setSuccess(`Section "${targetClassForSection.name} - ${newSection.name.trim().toUpperCase()}" created successfully.`);
       setShowSectionModal(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err?.message || "Failed to create section.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
+    setActionLoading(true);
+    setError(null);
     try {
       await api.createClass({
         name: newClass.name.trim(),
@@ -140,14 +178,18 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
       });
       setSuccess(`Class "${newClass.name.trim()}" created successfully.`);
       setShowClassModal(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err?.message || "Failed to create class.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCreateSubject = async (e: React.FormEvent) => {
     e.preventDefault();
+    setActionLoading(true);
+    setError(null);
     try {
       await api.createSubject({
         name: newSubject.name.trim(),
@@ -155,40 +197,198 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
       });
       setSuccess(`Subject "${newSubject.name.trim()}" created successfully.`);
       setShowSubjectModal(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err?.message || "Failed to create subject.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCreateYear = async (e: React.FormEvent) => {
     e.preventDefault();
+    setActionLoading(true);
+    setError(null);
     try {
-      await api.createAcademicYear(newYear);
-      setSuccess(`Academic session "${newYear.name}" created successfully.`);
+      await api.createAcademicYear({
+        name: newYear.name.trim(),
+        start_date: newYear.start_date,
+        end_date: newYear.end_date,
+        is_current: newYear.is_current,
+      });
+      setSuccess(`Academic session "${newYear.name.trim()}" created successfully.`);
       setShowYearModal(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to create academic session.");
+      setError(err?.message || "Failed to create academic year.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const activeYearObj = years.find((y) => y.id === selectedYearId);
+  // Edit Handlers
+  const handleOpenEditSection = (sec: SectionItem) => {
+    setEditingSection(sec);
+    setEditSectionForm({
+      name: sec.name,
+      capacity: sec.capacity || 40,
+    });
+  };
+
+  const handleUpdateSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSection) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.updateSection(editingSection.id, {
+        name: editSectionForm.name.trim().toUpperCase(),
+        capacity: Number(editSectionForm.capacity),
+      });
+      setSuccess(`Section "${editSectionForm.name.trim().toUpperCase()}" updated successfully.`);
+      setEditingSection(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || "Failed to update section.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenEditClass = (cls: ClassItem) => {
+    setEditingClass(cls);
+    setEditClassForm({
+      name: cls.name,
+      display_order: cls.display_order,
+    });
+  };
+
+  const handleUpdateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClass) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.updateClass(editingClass.id, {
+        name: editClassForm.name.trim(),
+        display_order: Number(editClassForm.display_order),
+      });
+      setSuccess(`Class "${editClassForm.name.trim()}" updated successfully.`);
+      setEditingClass(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || "Failed to update class.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenEditSubject = (sub: SubjectItem) => {
+    setEditingSubject(sub);
+    setEditSubjectForm({
+      name: sub.name,
+      code: sub.code,
+    });
+  };
+
+  const handleUpdateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSubject) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.updateSubject(editingSubject.id, {
+        name: editSubjectForm.name.trim(),
+        code: editSubjectForm.code.trim().toUpperCase(),
+      });
+      setSuccess(`Subject "${editSubjectForm.name.trim()}" updated successfully.`);
+      setEditingSubject(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || "Failed to update subject.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenEditYear = (y: AcademicYear) => {
+    setEditingYear(y);
+    setEditYearForm({
+      name: y.name,
+      start_date: y.start_date,
+      end_date: y.end_date,
+      is_current: y.is_current,
+    });
+  };
+
+  const handleUpdateYear = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingYear) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.updateAcademicYear(editingYear.id, {
+        name: editYearForm.name.trim(),
+        start_date: editYearForm.start_date,
+        end_date: editYearForm.end_date,
+        is_current: editYearForm.is_current,
+      });
+      setSuccess(`Academic session "${editYearForm.name.trim()}" updated successfully.`);
+      setEditingYear(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || "Failed to update academic year.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Delete Confirmation Handler
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      if (deleteTarget.type === "section") {
+        await api.deleteSection(deleteTarget.id);
+        setSuccess(`Section "${deleteTarget.title}" deleted successfully.`);
+      } else if (deleteTarget.type === "class") {
+        await api.deleteClass(deleteTarget.id);
+        setSuccess(`Class "${deleteTarget.title}" deleted successfully.`);
+      } else if (deleteTarget.type === "subject") {
+        await api.deleteSubject(deleteTarget.id);
+        setSuccess(`Subject "${deleteTarget.title}" deleted successfully.`);
+      } else if (deleteTarget.type === "year") {
+        await api.deleteAcademicYear(deleteTarget.id);
+        setSuccess(`Academic session "${deleteTarget.title}" deleted successfully.`);
+      }
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || `Failed to delete ${deleteTarget.type}.`);
+      setDeleteTarget(null);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Active session helper
+  const activeYearObj = years.find((y) => y.id === selectedYearId) || years[0];
   const activeSections = sections.filter((s) => s.academic_year_id === selectedYearId);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col bg-slate-50">
-      {/* Top Bar */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 flex items-center justify-between">
+      {/* Top Breadcrumb & Actions Bar */}
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-16 z-30">
         <div className="flex items-center space-x-3">
           <button
             onClick={onBack}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer"
+            className="flex items-center space-x-1 text-slate-500 hover:text-slate-800 text-xs font-semibold py-1 px-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>App Launcher</span>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Apps</span>
           </button>
-          <span className="text-slate-300">|</span>
+          <span className="text-slate-300">/</span>
           <div className="flex items-center space-x-2">
             <School className="w-4 h-4 text-indigo-600" />
             <span className="font-bold text-slate-900 text-sm">Academic Management</span>
@@ -197,9 +397,9 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
 
         {/* Status Messages */}
         <div className="flex items-center space-x-3">
-          {loading && (
+          {(loading || actionLoading) && (
             <div className="flex items-center space-x-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg animate-pulse">
-              <span>Loading...</span>
+              <span>Syncing...</span>
             </div>
           )}
           {error && (
@@ -248,7 +448,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
               )}
             </div>
 
-            {/* Navigation Menu (No emojis, clean Lucide icons) */}
+            {/* Navigation Menu */}
             <nav className="space-y-1">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1.5">
                 Session Structure
@@ -342,8 +542,8 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
         </aside>
 
         {/* Right Content Area */}
-        <main className="flex-1 p-6 overflow-y-auto">
-          {/* VIEW 1: Classes & Sections Tree (Hierarchical Operational View) */}
+        <main className="flex-1 p-6 max-w-6xl">
+          {/* VIEW 1: Classes & Sections Tree */}
           {activeTab === "sections-tree" && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200 gap-2">
@@ -411,15 +611,40 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                             </div>
                           </div>
 
-                          {canManage && (
-                            <button
-                              onClick={() => handleOpenAddSection(cls)}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3 text-indigo-600" />
-                              <span>Add Section to {cls.name}</span>
-                            </button>
-                          )}
+                          <div className="flex items-center space-x-2">
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenAddSection(cls)}
+                                  className="inline-flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3 text-indigo-600" />
+                                  <span>Add Section</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEditClass(cls)}
+                                  title="Edit Grade Class"
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      type: "class",
+                                      id: cls.id,
+                                      title: cls.name,
+                                      subtitle: "All associated sections must be deleted or reassigned first.",
+                                    })
+                                  }
+                                  title="Delete Grade Class"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {/* Sections Cards Grid */}
@@ -445,33 +670,59 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                                   key={sec.id}
                                   className="p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 transition-colors shadow-2xs flex flex-col justify-between"
                                 >
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center space-x-2">
-                                      <span className="text-base font-bold text-slate-900">
-                                        Section {sec.name}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-base font-bold text-slate-900">
+                                          Section {sec.name}
+                                        </span>
+                                      </div>
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Active
                                       </span>
                                     </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      Active
-                                    </span>
-                                  </div>
 
-                                  <div className="space-y-1 text-xs text-slate-500 my-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-400">Capacity:</span>
-                                      <span className="font-medium text-slate-700">{sec.capacity || 40} seats</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-400">Class Teacher:</span>
-                                      <span className="font-medium text-slate-700">
-                                        {sec.class_teacher_membership_id ? `Teacher #${sec.class_teacher_membership_id}` : "Not assigned"}
-                                      </span>
+                                    <div className="space-y-1 text-xs text-slate-500 my-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-slate-400">Capacity:</span>
+                                        <span className="font-medium text-slate-700">{sec.capacity || 40} seats</span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-slate-400">Class Teacher:</span>
+                                        <span className="font-medium text-slate-700">
+                                          {sec.class_teacher_membership_id ? `Teacher #${sec.class_teacher_membership_id}` : "Not assigned"}
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
 
-                                  <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                                    <span>ID #{sec.id}</span>
-                                    <span className="text-indigo-600 font-sans font-semibold">Ready</span>
+                                  <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                                    <span className="font-mono text-slate-400">ID #{sec.id}</span>
+                                    {canManage && (
+                                      <div className="flex items-center space-x-1">
+                                        <button
+                                          onClick={() => handleOpenEditSection(sec)}
+                                          title="Edit Section"
+                                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            setDeleteTarget({
+                                              type: "section",
+                                              id: sec.id,
+                                              title: `${cls.name} - Section ${sec.name}`,
+                                              subtitle: `Session: ${activeYearObj?.name}`,
+                                            })
+                                          }
+                                          title="Delete Section"
+                                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -515,7 +766,8 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                       <th className="px-5 py-3.5 w-24">Display Order</th>
                       <th className="px-5 py-3.5">Class Name</th>
                       <th className="px-5 py-3.5">Sections Count</th>
-                      <th className="px-5 py-3.5 text-right">Class ID</th>
+                      <th className="px-5 py-3.5 text-center w-28">Class ID</th>
+                      {canManage && <th className="px-5 py-3.5 text-right w-24">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -530,7 +782,34 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                           </td>
                           <td className="px-5 py-3.5 font-bold text-slate-900">{c.name}</td>
                           <td className="px-5 py-3.5 font-medium text-slate-500">{count} total across all sessions</td>
-                          <td className="px-5 py-3.5 text-right font-mono text-slate-400">#{c.id}</td>
+                          <td className="px-5 py-3.5 text-center font-mono text-slate-400">#{c.id}</td>
+                          {canManage && (
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex items-center justify-end space-x-1">
+                                <button
+                                  onClick={() => handleOpenEditClass(c)}
+                                  title="Edit Grade Class"
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      type: "class",
+                                      id: c.id,
+                                      title: c.name,
+                                      subtitle: "All associated sections must be deleted or reassigned first.",
+                                    })
+                                  }
+                                  title="Delete Grade Class"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -586,7 +865,8 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                       <tr>
                         <th className="px-5 py-3.5 w-32">Subject Code</th>
                         <th className="px-5 py-3.5">Subject Name</th>
-                        <th className="px-5 py-3.5 text-right">Subject ID</th>
+                        <th className="px-5 py-3.5 text-center w-28">Subject ID</th>
+                        {canManage && <th className="px-5 py-3.5 text-right w-24">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -598,7 +878,33 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                             </span>
                           </td>
                           <td className="px-5 py-3.5 font-bold text-slate-900">{sub.name}</td>
-                          <td className="px-5 py-3.5 text-right font-mono text-slate-400">#{sub.id}</td>
+                          <td className="px-5 py-3.5 text-center font-mono text-slate-400">#{sub.id}</td>
+                          {canManage && (
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex items-center justify-end space-x-1">
+                                <button
+                                  onClick={() => handleOpenEditSubject(sub)}
+                                  title="Edit Subject"
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      type: "subject",
+                                      id: sub.id,
+                                      title: `${sub.name} (${sub.code})`,
+                                    })
+                                  }
+                                  title="Delete Subject"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -665,7 +971,6 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                     </div>
 
                     <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Session ID #{y.id}</span>
                       <button
                         onClick={() => {
                           setSelectedYearId(y.id);
@@ -675,6 +980,32 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                       >
                         View Sections →
                       </button>
+
+                      {canManage && (
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => handleOpenEditYear(y)}
+                            title="Edit Academic Session"
+                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() =>
+                              setDeleteTarget({
+                                type: "year",
+                                id: y.id,
+                                title: y.name,
+                                subtitle: "Session must contain no active sections or student enrollments.",
+                              })
+                            }
+                            title="Delete Academic Session"
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -745,9 +1076,76 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  Create Section
+                  {actionLoading ? "Creating..." : "Create Section"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Section */}
+      {editingSection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-900">Edit Section</h3>
+              <button
+                onClick={() => setEditingSection(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSection} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Section Name / Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editSectionForm.name}
+                  onChange={(e) => setEditSectionForm({ ...editSectionForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Seating Capacity
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  required
+                  value={editSectionForm.capacity}
+                  onChange={(e) =>
+                    setEditSectionForm({ ...editSectionForm, capacity: Number(e.target.value) })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingSection(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -805,9 +1203,69 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  Save Grade Class
+                  {actionLoading ? "Creating..." : "Create Grade Class"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Grade Class */}
+      {editingClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-900">Edit Grade Class</h3>
+              <button onClick={() => setEditingClass(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateClass} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Class / Grade Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editClassForm.name}
+                  onChange={(e) => setEditClassForm({ ...editClassForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Display Sorting Order</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  required
+                  value={editClassForm.display_order}
+                  onChange={(e) =>
+                    setEditClassForm({ ...editClassForm, display_order: Number(e.target.value) })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingClass(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -820,7 +1278,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="text-base font-bold text-slate-900">Add Master Curriculum Subject</h3>
+              <h3 className="text-base font-bold text-slate-900">Add Master Subject</h3>
               <button onClick={() => setShowSubjectModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
                 <X className="w-4 h-4" />
               </button>
@@ -832,7 +1290,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Mathematics, Physics, English"
+                  placeholder="e.g. Mathematics, English Language, Physics"
                   value={newSubject.name}
                   onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -844,10 +1302,10 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 <input
                   type="text"
                   required
-                  placeholder="e.g. MATH101, ENG01"
+                  placeholder="e.g. MATH101, ENG01, SCI-PHY"
                   value={newSubject.code}
                   onChange={(e) => setNewSubject({ ...newSubject, code: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-mono"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-mono font-bold"
                 />
               </div>
 
@@ -861,9 +1319,65 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  Save Subject
+                  {actionLoading ? "Creating..." : "Add Subject"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Subject */}
+      {editingSubject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-900">Edit Subject</h3>
+              <button onClick={() => setEditingSubject(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubject} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Subject Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editSubjectForm.name}
+                  onChange={(e) => setEditSubjectForm({ ...editSubjectForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Subject Code</label>
+                <input
+                  type="text"
+                  required
+                  value={editSubjectForm.code}
+                  onChange={(e) => setEditSubjectForm({ ...editSubjectForm, code: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-mono font-bold"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingSubject(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -884,11 +1398,11 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
 
             <form onSubmit={handleCreateYear} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Session Name</label>
+                <label className="block font-semibold text-slate-700 mb-1">Session Label</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 2026-2027"
+                  placeholder="e.g. 2026-2027, 2027 Spring"
                   value={newYear.name}
                   onChange={(e) => setNewYear({ ...newYear, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -918,18 +1432,15 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 pt-1">
+              <label className="flex items-center space-x-2 pt-1 cursor-pointer">
                 <input
                   type="checkbox"
-                  id="isCurrentCheck"
                   checked={newYear.is_current}
                   onChange={(e) => setNewYear({ ...newYear, is_current: e.target.checked })}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                  className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
                 />
-                <label htmlFor="isCurrentCheck" className="text-xs text-slate-700">
-                  Set as active current school session
-                </label>
-              </div>
+                <span className="font-semibold text-slate-700">Set as Current Active Session</span>
+              </label>
 
               <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
                 <button
@@ -941,12 +1452,143 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  Create Session
+                  {actionLoading ? "Creating..." : "Create Session"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Academic Year */}
+      {editingYear && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-900">Edit Academic Session</h3>
+              <button onClick={() => setEditingYear(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateYear} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Session Label</label>
+                <input
+                  type="text"
+                  required
+                  value={editYearForm.name}
+                  onChange={(e) => setEditYearForm({ ...editYearForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={editYearForm.start_date}
+                    onChange={(e) => setEditYearForm({ ...editYearForm, start_date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={editYearForm.end_date}
+                    onChange={(e) => setEditYearForm({ ...editYearForm, end_date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center space-x-2 pt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editYearForm.is_current}
+                  onChange={(e) => setEditYearForm({ ...editYearForm, is_current: e.target.checked })}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                />
+                <span className="font-semibold text-slate-700">Set as Current Active Session</span>
+              </label>
+
+              <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingYear(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Delete Confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+
+            <h3 className="text-base font-bold text-slate-900">
+              Delete{" "}
+              {deleteTarget.type === "class"
+                ? "Grade Class"
+                : deleteTarget.type === "section"
+                ? "Section"
+                : deleteTarget.type === "subject"
+                ? "Subject"
+                : "Academic Session"}
+              ?
+            </h3>
+
+            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+              Are you sure you want to permanently delete{" "}
+              <span className="font-bold text-slate-900">"{deleteTarget.title}"</span>?
+            </p>
+
+            {deleteTarget.subtitle && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/80 p-2 rounded-lg mt-2.5">
+                {deleteTarget.subtitle}
+              </p>
+            )}
+
+            <div className="pt-4 mt-4 flex items-center justify-end space-x-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {actionLoading ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

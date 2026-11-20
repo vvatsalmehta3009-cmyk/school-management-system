@@ -146,6 +146,27 @@ class ApiClient {
     });
   }
 
+  public async updateAcademicYear(
+    id: number,
+    payload: Partial<{
+      name: string;
+      start_date: string;
+      end_date: string;
+      is_current: boolean;
+    }>
+  ): Promise<AcademicYear> {
+    return this.request<AcademicYear>(`/academic/years/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async deleteAcademicYear(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/academic/years/${id}`, {
+      method: "DELETE",
+    });
+  }
+
   public async getClasses(): Promise<ClassItem[]> {
     return this.request<ClassItem[]>("/academic/classes");
   }
@@ -157,6 +178,25 @@ class ApiClient {
     return this.request<ClassItem>("/academic/classes", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  public async updateClass(
+    id: number,
+    payload: Partial<{
+      name: string;
+      display_order: number;
+    }>
+  ): Promise<ClassItem> {
+    return this.request<ClassItem>(`/academic/classes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async deleteClass(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/academic/classes/${id}`, {
+      method: "DELETE",
     });
   }
 
@@ -184,6 +224,26 @@ class ApiClient {
     });
   }
 
+  public async updateSection(
+    id: number,
+    payload: Partial<{
+      name: string;
+      capacity: number;
+      class_teacher_membership_id?: number | null;
+    }>
+  ): Promise<SectionItem> {
+    return this.request<SectionItem>(`/academic/sections/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async deleteSection(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/academic/sections/${id}`, {
+      method: "DELETE",
+    });
+  }
+
   public async getSubjects(): Promise<SubjectItem[]> {
     return this.request<SubjectItem[]>("/academic/subjects");
   }
@@ -195,6 +255,25 @@ class ApiClient {
     return this.request<SubjectItem>("/academic/subjects", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  public async updateSubject(
+    id: number,
+    payload: Partial<{
+      name: string;
+      code: string;
+    }>
+  ): Promise<SubjectItem> {
+    return this.request<SubjectItem>(`/academic/subjects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async deleteSubject(id: number): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/academic/subjects/${id}`, {
+      method: "DELETE",
     });
   }
 

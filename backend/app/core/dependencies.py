@@ -26,6 +26,8 @@ class AuthenticatedMembership:
     school_code: str
     roles: list[str]
     permissions: list[str]
+    full_name: str = ""
+    school_user_code: str | None = None
     must_change_password: bool = False
     is_super_admin: bool = False
 
@@ -111,6 +113,8 @@ class Authenticator:
                 school_code=str(school_code),
                 roles=roles,
                 permissions=permissions,
+                full_name=str(payload.get("full_name") or ""),
+                school_user_code=payload.get("school_user_code"),
                 must_change_password=bool(payload.get("must_change_password", False)),
                 is_super_admin=bool(payload.get("is_super_admin", False))
             )

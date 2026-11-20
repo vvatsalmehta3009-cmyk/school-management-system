@@ -65,10 +65,37 @@ class AcademicYearResponse(BaseModel):
         from_attributes = True
 
 
+class AcademicYearUpdate(BaseModel):
+    """Payload to update an academic year session."""
+    name: str | None = Field(default=None, min_length=1, max_length=50, example="2026-2027")
+    start_date: date | None = Field(default=None, example="2026-06-01")
+    end_date: date | None = Field(default=None, example="2027-04-30")
+    is_current: bool | None = Field(default=None, description="Whether this is the currently active school session")
+
+
+class ClassUpdate(BaseModel):
+    """Payload to update a class grade level."""
+    name: str | None = Field(default=None, min_length=1, max_length=50, example="Grade 10")
+    display_order: int | None = Field(default=None, ge=1, le=100, example=10)
+
+
+class SectionUpdate(BaseModel):
+    """Payload to update an active cohort section."""
+    name: str | None = Field(default=None, min_length=1, max_length=20, example="A")
+    capacity: int | None = Field(default=None, ge=1, le=200, example=40)
+    class_teacher_membership_id: int | None = None
+
+
 class SubjectCreate(BaseModel):
     """Payload to create a master subject."""
     name: str = Field(..., min_length=1, max_length=100, example="Mathematics")
     code: str = Field(..., min_length=1, max_length=20, example="MATH101")
+
+
+class SubjectUpdate(BaseModel):
+    """Payload to update a master subject."""
+    name: str | None = Field(default=None, min_length=1, max_length=100, example="Mathematics")
+    code: str | None = Field(default=None, min_length=1, max_length=20, example="MATH101")
 
 
 class SubjectResponse(BaseModel):

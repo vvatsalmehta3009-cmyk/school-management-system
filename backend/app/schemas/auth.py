@@ -15,6 +15,7 @@ class TokenResponse(BaseModel):
     expires_in_seconds: int
     user_id: int
     full_name: str
+    school_user_code: str | None = None
     school_id: int
     school_code: str
     school_name: str

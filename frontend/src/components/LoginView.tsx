@@ -26,7 +26,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
       // Fetch me
       const me = await api.getMe();
       onLoginSuccess(
-        { ...me, must_change_password: res.must_change_password ?? me.must_change_password },
+        {
+          ...me,
+          full_name: me.full_name || res.full_name,
+          school_user_code: me.school_user_code || res.school_user_code,
+          must_change_password: res.must_change_password ?? me.must_change_password,
+        },
         res.school_name
       );
     } catch (err: any) {

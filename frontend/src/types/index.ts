@@ -3,6 +3,8 @@ export interface UserProfile {
   membership_id: number;
   school_id: number;
   school_code: string;
+  full_name?: string;
+  school_user_code?: string;
   roles: string[];
   permissions: string[];
   must_change_password?: boolean;
@@ -15,6 +17,7 @@ export interface LoginResponse {
   expires_in_seconds: number;
   user_id: number;
   full_name: string;
+  school_user_code?: string;
   school_id: number;
   school_code: string;
   school_name: string;

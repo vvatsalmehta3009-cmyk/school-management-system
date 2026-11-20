@@ -7,12 +7,16 @@ from app.core.dependencies import AuthenticatedMembership, PermissionChecker, ge
 from app.schemas.academic import (
     AcademicYearCreate,
     AcademicYearResponse,
+    AcademicYearUpdate,
     ClassCreate,
     ClassResponse,
+    ClassUpdate,
     SectionCreate,
     SectionResponse,
+    SectionUpdate,
     SubjectCreate,
     SubjectResponse,
+    SubjectUpdate,
 )
 from app.services.academic_service import AcademicService
 
@@ -55,6 +59,38 @@ def create_academic_year(
     return service.create_academic_year(school_id=current_membership.school_id, data=data)
 
 
+@router.put(
+    "/years/{year_id}",
+    response_model=AcademicYearResponse,
+    summary="Update Academic Year",
+    description="Update an academic calendar session for the authenticated school.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def update_academic_year(
+    year_id: int,
+    data: AcademicYearUpdate,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> AcademicYearResponse:
+    service = AcademicService(db)
+    return service.update_academic_year(school_id=current_membership.school_id, year_id=year_id, data=data)
+
+
+@router.delete(
+    "/years/{year_id}",
+    summary="Delete Academic Year",
+    description="Delete an academic calendar session if it contains no active sections or enrollments.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def delete_academic_year(
+    year_id: int,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict:
+    service = AcademicService(db)
+    return service.delete_academic_year(school_id=current_membership.school_id, year_id=year_id)
+
+
 # ----------------------------------------------------------------------
 # Classes (Permanent Grade Levels)
 # ----------------------------------------------------------------------
@@ -88,8 +124,39 @@ def create_class(
     db: Annotated[Session, Depends(get_db)]
 ) -> ClassResponse:
     service = AcademicService(db)
-    # Notice: school_id is taken directly from the verified JWT, NOT from user input!
     return service.create_class(school_id=current_membership.school_id, data=data)
+
+
+@router.put(
+    "/classes/{class_id}",
+    response_model=ClassResponse,
+    summary="Update Class",
+    description="Update a grade level name or display order.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def update_class(
+    class_id: int,
+    data: ClassUpdate,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> ClassResponse:
+    service = AcademicService(db)
+    return service.update_class(school_id=current_membership.school_id, class_id=class_id, data=data)
+
+
+@router.delete(
+    "/classes/{class_id}",
+    summary="Delete Class",
+    description="Delete a permanent grade level if no child sections exist.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def delete_class(
+    class_id: int,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict:
+    service = AcademicService(db)
+    return service.delete_class(school_id=current_membership.school_id, class_id=class_id)
 
 
 # ----------------------------------------------------------------------
@@ -134,6 +201,38 @@ def create_section(
     return service.create_section(school_id=current_membership.school_id, data=data)
 
 
+@router.put(
+    "/sections/{section_id}",
+    response_model=SectionResponse,
+    summary="Update Section",
+    description="Update an active cohort section's name, capacity, or class teacher.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def update_section(
+    section_id: int,
+    data: SectionUpdate,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> SectionResponse:
+    service = AcademicService(db)
+    return service.update_section(school_id=current_membership.school_id, section_id=section_id, data=data)
+
+
+@router.delete(
+    "/sections/{section_id}",
+    summary="Delete Section",
+    description="Delete an active cohort section if no students are enrolled.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def delete_section(
+    section_id: int,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict:
+    service = AcademicService(db)
+    return service.delete_section(school_id=current_membership.school_id, section_id=section_id)
+
+
 # ----------------------------------------------------------------------
 # Subjects (Master Curriculum Catalog)
 # ----------------------------------------------------------------------
@@ -168,4 +267,37 @@ def create_subject(
 ) -> SubjectResponse:
     service = AcademicService(db)
     return service.create_subject(school_id=current_membership.school_id, data=data)
+
+
+@router.put(
+    "/subjects/{subject_id}",
+    response_model=SubjectResponse,
+    summary="Update Subject",
+    description="Update a master curriculum subject name or code.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def update_subject(
+    subject_id: int,
+    data: SubjectUpdate,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> SubjectResponse:
+    service = AcademicService(db)
+    return service.update_subject(school_id=current_membership.school_id, subject_id=subject_id, data=data)
+
+
+@router.delete(
+    "/subjects/{subject_id}",
+    summary="Delete Subject",
+    description="Delete a master curriculum subject if no teaching allocations exist.",
+    dependencies=[Depends(PermissionChecker("academic.manage"))]
+)
+def delete_subject(
+    subject_id: int,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict:
+    service = AcademicService(db)
+    return service.delete_subject(school_id=current_membership.school_id, subject_id=subject_id)
+
 

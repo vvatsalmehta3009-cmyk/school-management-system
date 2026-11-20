@@ -58,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
             membership_id: res.school_membership_id,
             school_id: res.school_id,
             school_code: res.school_code,
+            full_name: res.full_name || user.full_name,
+            school_user_code: res.school_user_code || user.school_user_code,
             roles: res.roles,
             permissions: res.permissions,
             is_super_admin: res.is_super_admin,
@@ -210,9 +212,24 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: User Profile, Role, & Scopes */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2.5 sm:space-x-3">
+          {/* School User Identity Card (User Name & School User Code) */}
+          <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0">
+              {(user.full_name || "U").trim().charAt(0)}
+            </div>
+            <div className="text-left leading-tight">
+              <div className="font-bold text-xs text-slate-900 truncate max-w-[110px] sm:max-w-[160px]">
+                {user.full_name || "School User"}
+              </div>
+              <div className="font-mono text-[10px] text-indigo-700 font-semibold truncate">
+                {user.school_user_code || `User #${user.user_id}`}
+              </div>
+            </div>
+          </div>
+
           {/* Role Badge */}
-          <div className="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+          <div className="hidden lg:flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>{user.roles.join(", ") || "User"}</span>
           </div>
