@@ -70,6 +70,52 @@ class AcademicService:
         )
         return list(self.db.scalars(query).all())
 
+    def create_academic_year(self, school_id: int, data) -> AcademicYear:
+        """Create an academic year session for this school."""
+        # Check date order
+        if data.end_date <= data.start_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End date must be strictly after start date."
+            )
+
+        # Check duplicate name
+        existing = self.db.scalars(
+            select(AcademicYear).where(
+                AcademicYear.school_id == school_id,
+                AcademicYear.name == data.name
+            )
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Academic year '{data.name}' already exists in your school."
+            )
+
+        # If marking this year as current, unset existing current year
+        if data.is_current:
+            existing_current = self.db.scalars(
+                select(AcademicYear).where(
+                    AcademicYear.school_id == school_id,
+                    AcademicYear.is_current == True
+                )
+            ).all()
+            for y in existing_current:
+                y.is_current = False
+
+        year = AcademicYear(
+            school_id=school_id,
+            name=data.name,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            is_current=data.is_current
+        )
+        self.db.add(year)
+        self.db.commit()
+        self.db.refresh(year)
+        return year
+
     # ------------------------------------------------------------------
     # Sections (Yearly Active Cohorts)
     # ------------------------------------------------------------------

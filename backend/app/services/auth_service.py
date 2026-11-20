@@ -1,6 +1,6 @@
 from datetime import timedelta
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
@@ -59,44 +59,66 @@ class AuthService:
 
     def authenticate(self, credentials: LoginRequest) -> TokenResponse:
         """
-        Authenticates a user via their unique school_user_code and password.
+        Authenticates a user via their unique school_user_code OR email, plus password.
         Returns a signed JWT populated with active school context, roles, and permissions.
         """
-        # 1. Lookup the membership record by school_user_code
-        query = (
+        raw_identifier = (credentials.identifier or credentials.school_user_code or "").strip()
+        if not raw_identifier:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please provide an email address or school user code."
+            )
+
+        # 1. Attempt lookup by school_user_code (case-insensitive code match)
+        membership = self.db.scalars(
             select(SchoolMembership)
-            .where(SchoolMembership.school_user_code == credentials.school_user_code)
+            .where(func.upper(SchoolMembership.school_user_code) == raw_identifier.upper())
             .options(
                 selectinload(SchoolMembership.user),
                 selectinload(SchoolMembership.school)
             )
-        )
-        membership = self.db.scalars(query).first()
+        ).first()
 
-        # 2. Guard: Invalid code
-        if not membership:
+        user = None
+        if membership:
+            user = membership.user
+        else:
+            # 2. If not found by user code, lookup user by email (case-insensitive)
+            user = self.db.scalars(
+                select(User).where(func.lower(User.email) == raw_identifier.lower())
+            ).first()
+
+            if user:
+                # Find active school memberships for this user
+                memberships = self.db.scalars(
+                    select(SchoolMembership)
+                    .where(
+                        SchoolMembership.user_id == user.id,
+                        SchoolMembership.status == "active"
+                    )
+                    .options(
+                        selectinload(SchoolMembership.user),
+                        selectinload(SchoolMembership.school)
+                    )
+                    .order_by(SchoolMembership.id.asc())
+                ).all()
+
+                if not memberships:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="No active school membership found for this account."
+                    )
+                membership = memberships[0]
+
+        # 3. Guard: Invalid user or membership
+        if not membership or not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid school user code or password."
+                detail="Invalid email / school user code or password."
             )
 
-        # 3. Guard: Membership inactive or left
-        if membership.status != "active":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Your membership at this school is currently {membership.status}."
-            )
-
-        # 4. Guard: School inactive
-        if not membership.school.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="This school account is currently deactivated."
-            )
-
-        user = membership.user
-        # 5. Guard: User account inactive or missing password hash
-        if not user or not user.is_active:
+        # 4. Guard: User account inactive or missing password hash
+        if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is deactivated."
@@ -108,14 +130,28 @@ class AuthService:
                 detail="Password is not set for this account. Please use password reset or invite link."
             )
 
-        # 6. Verify password using bcrypt/argon2
+        # 5. Verify password using bcrypt/argon2
         if not self.hasher.verify(credentials.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid school user code or password."
+                detail="Invalid email / school user code or password."
             )
 
-        # 7. Resolve Roles & Atomic Permissions for this specific school membership
+        # 6. Guard: Membership inactive or left
+        if membership.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your membership at this school is currently {membership.status}."
+            )
+
+        # 7. Guard: School inactive
+        if not membership.school.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This school account is currently deactivated."
+            )
+
+        # 8. Resolve Roles & Atomic Permissions for this specific school membership
         roles, permissions = self._get_membership_roles_and_permissions(membership.id)
 
         # 8. Create JWT Access Token with embedded tenant context
@@ -125,6 +161,7 @@ class AuthService:
             "school_code": membership.school.code,
             "roles": roles,
             "permissions": permissions,
+            "must_change_password": bool(user.must_change_password),
         }
         access_token = self.tokens.create_access_token(
             subject=user.id,
@@ -142,8 +179,23 @@ class AuthService:
             school_name=membership.school.name,
             school_membership_id=membership.id,
             roles=roles,
-            permissions=permissions
+            permissions=permissions,
+            must_change_password=bool(user.must_change_password)
         )
+
+    def change_password(self, user_id: int, new_password: str) -> None:
+        """
+        Updates a user's password and clears the must_change_password requirement.
+        """
+        user = self.db.scalars(select(User).where(User.id == user_id)).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User account not found."
+            )
+        user.password_hash = self.hasher.hash(new_password)
+        user.must_change_password = False
+        self.db.commit()
 
     def get_user_memberships(self, user_id: int) -> list[MembershipContextResponse]:
         """
@@ -219,6 +271,7 @@ class AuthService:
             "school_code": membership.school.code,
             "roles": roles,
             "permissions": permissions,
+            "must_change_password": bool(membership.user.must_change_password),
         }
         access_token = self.tokens.create_access_token(
             subject=user_id,
@@ -236,6 +289,7 @@ class AuthService:
             school_name=membership.school.name,
             school_membership_id=membership.id,
             roles=roles,
-            permissions=permissions
+            permissions=permissions,
+            must_change_password=bool(membership.user.must_change_password)
         )
 

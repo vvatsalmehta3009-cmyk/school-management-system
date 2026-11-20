@@ -22,8 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API v1 Router
+# Include API v1 Router (under /api/v1 and also at root / for flexible Postman/client baseUrl configurations)
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+app.include_router(api_v1_router)
 
 
 @app.get("/health", tags=["System"])

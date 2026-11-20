@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import AuthenticatedMembership, get_current_membership
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     LoginRequest,
     MembershipContextResponse,
     SwitchContextRequest,
@@ -71,4 +73,24 @@ def switch_context(
         user_id=current_membership.user_id,
         target_membership_id=request.target_membership_id
     )
+
+
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+    summary="Update Account Password",
+    description="Updates password and clears the must_change_password flag upon first login or user request."
+)
+def change_password(
+    data: ChangePasswordRequest,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> ChangePasswordResponse:
+    auth_service = AuthService(db)
+    auth_service.change_password(
+        user_id=current_membership.user_id,
+        new_password=data.new_password
+    )
+    return ChangePasswordResponse()
+
 

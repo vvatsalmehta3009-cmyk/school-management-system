@@ -22,6 +22,13 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+
 # Logs
 *.log
 logs/

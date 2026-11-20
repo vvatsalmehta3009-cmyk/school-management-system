@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    """Payload for user login using school_user_code and password."""
-    school_user_code: str = Field(..., description="Unique school login identifier, e.g. ABC001000101")
+    """Payload for user login using either school_user_code OR email, and password."""
+    identifier: str | None = Field(default=None, description="Email address or School User Code (e.g. HMBS000001 or admin@school.com)")
+    school_user_code: str | None = Field(default=None, description="Backward-compatible alias for identifier")
     password: str = Field(..., min_length=1, description="Account password")
 
 
@@ -20,6 +21,18 @@ class TokenResponse(BaseModel):
     school_membership_id: int
     roles: list[str]
     permissions: list[str]
+    must_change_password: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    """Payload to update user password."""
+    new_password: str = Field(..., min_length=6, description="New account password")
+
+
+class ChangePasswordResponse(BaseModel):
+    """Returned after successfully changing password."""
+    status: str = "success"
+    message: str = "Password changed successfully."
 
 
 class MembershipContextResponse(BaseModel):

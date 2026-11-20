@@ -51,3 +51,28 @@ class Section(Base):
     # Relationships
     academic_year: Mapped["AcademicYear"] = relationship("AcademicYear", back_populates="sections")
     school_class: Mapped["SchoolClass"] = relationship("SchoolClass", back_populates="sections")
+
+
+class Subject(Base):
+    __tablename__ = "subjects"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    school_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("schools.id", ondelete="RESTRICT"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class SectionSubjectTeacher(Base):
+    __tablename__ = "section_subject_teachers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("sections.id", ondelete="CASCADE"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False)
+    teacher_membership_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("school_memberships.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+

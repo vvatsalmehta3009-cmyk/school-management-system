@@ -43,6 +43,14 @@ class SectionResponse(BaseModel):
         from_attributes = True
 
 
+class AcademicYearCreate(BaseModel):
+    """Payload to create an academic year session."""
+    name: str = Field(..., min_length=4, max_length=50, example="2026-2027")
+    start_date: date = Field(..., example="2026-04-01")
+    end_date: date = Field(..., example="2027-03-31")
+    is_current: bool = Field(default=True, description="Whether this is the currently active school session")
+
+
 class AcademicYearResponse(BaseModel):
     """Output representation of an academic year session."""
     id: int
