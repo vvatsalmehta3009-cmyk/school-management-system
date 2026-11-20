@@ -7,7 +7,6 @@ import {
   ClipboardCheck,
   CreditCard,
   Building2,
-  Lock,
   UserCog,
   BookOpen,
   Search,
@@ -112,15 +111,21 @@ export const AppGrid: React.FC<AppGridProps> = ({
     },
   ];
 
+  // RBAC Permission Check: Super Admin and School Admin have full access; others checked against atomic permissions
   const hasAccess = (tile: AppTile) => {
     if (!tile.requiredPermission) return true;
+    if (user.is_super_admin) return true;
     if (user.roles.includes("School Admin") || user.roles.includes("Super Admin")) return true;
     return user.permissions.includes(tile.requiredPermission);
   };
 
   const query = searchQuery.trim().toLowerCase();
 
-  const filteredApps = allApps.filter(
+  // Filter 1: Only show apps the user has permission to access (unauthorized apps are not displayed)
+  const accessibleApps = allApps.filter((tile) => hasAccess(tile));
+
+  // Filter 2: Search query filter
+  const filteredApps = accessibleApps.filter(
     (t) =>
       !query ||
       t.title.toLowerCase().includes(query) ||
@@ -137,7 +142,7 @@ export const AppGrid: React.FC<AppGridProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search school apps..."
+            placeholder="Search your apps..."
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-xs"
           />
         </div>
@@ -153,94 +158,96 @@ export const AppGrid: React.FC<AppGridProps> = ({
         </div>
       </div>
 
-      {/* Unified App Grid (No Categories, Clean 4-Column Balanced Grid) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        {filteredApps.map((tile) => {
-          const Icon = tile.icon;
-          const accessible = hasAccess(tile);
-          const isActive = tile.status === "ACTIVE";
+      {/* Authorized App Grid: Only accessible apps are displayed */}
+      {filteredApps.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+          <p className="text-slate-500 text-sm">
+            {accessibleApps.length === 0
+              ? "No apps are currently assigned to your role."
+              : `No apps found matching "${searchQuery}".`}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {filteredApps.map((tile) => {
+            const Icon = tile.icon;
+            const isActive = tile.status === "ACTIVE";
 
-          return (
-            <div
-              key={tile.id}
-              className={`group relative rounded-2xl border transition-all duration-200 flex flex-col justify-between p-6 select-none min-h-[220px] ${
-                accessible
-                  ? "bg-white border-slate-200/90 shadow-sm hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 cursor-pointer"
-                  : "bg-slate-50/70 border-slate-200/60 opacity-60 cursor-not-allowed"
-              }`}
-              onClick={() => {
-                if (!accessible) return;
-                if (tile.id === "onboarding") {
-                  onOpenOnboardModal();
-                } else if (isActive) {
-                  onOpenApp(tile.id);
-                }
-              }}
-            >
-              {/* Top Row: Status badge on left, Lock/Arrow on right */}
-              <div className="flex items-center justify-between w-full mb-4">
-                {tile.status === "ACTIVE" ? (
-                  <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
-                    Ready
-                  </span>
-                ) : tile.status === "NEXT" ? (
-                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/80">
-                    Up Next
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/60">
-                    Coming Soon
-                  </span>
-                )}
+            return (
+              <div
+                key={tile.id}
+                className={`group relative rounded-2xl border transition-all duration-200 flex flex-col justify-between p-6 select-none min-h-[220px] bg-white border-slate-200/90 shadow-sm hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 ${
+                  isActive ? "cursor-pointer" : "cursor-default"
+                }`}
+                onClick={() => {
+                  if (tile.id === "onboarding") {
+                    onOpenOnboardModal();
+                  } else if (isActive) {
+                    onOpenApp(tile.id);
+                  }
+                }}
+              >
+                {/* Top Row: Status badge on left, Arrow on right */}
+                <div className="flex items-center justify-between w-full mb-4">
+                  {tile.status === "ACTIVE" ? (
+                    <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
+                      Ready
+                    </span>
+                  ) : tile.status === "NEXT" ? (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/80">
+                      Up Next
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/60">
+                      Coming Soon
+                    </span>
+                  )}
 
-                {!accessible ? (
-                  <span className="inline-flex items-center text-xs text-slate-400 font-medium">
-                    <Lock className="w-3.5 h-3.5 mr-1" /> Locked
-                  </span>
-                ) : (
-                  <div className="text-slate-300 group-hover:text-indigo-600 transition-colors">
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  {isActive && (
+                    <div className="text-slate-300 group-hover:text-indigo-600 transition-colors">
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Middle: Prominent Icon + Readable Title & Description */}
+                <div className="flex flex-col items-start space-y-3.5 my-1">
+                  <div
+                    className={`w-13 h-13 rounded-2xl bg-gradient-to-tr ${tile.color} flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform duration-200 shrink-0`}
+                  >
+                    <Icon className="w-6.5 h-6.5" />
                   </div>
-                )}
-              </div>
 
-              {/* Middle: Prominent Icon + Larger Readable Title & Description */}
-              <div className="flex flex-col items-start space-y-3.5 my-1">
-                <div
-                  className={`w-13 h-13 rounded-2xl bg-gradient-to-tr ${tile.color} flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform duration-200 shrink-0`}
-                >
-                  <Icon className="w-6.5 h-6.5" />
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">
+                      {tile.title}
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                      {tile.tagline}
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight">
-                    {tile.title}
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-                    {tile.tagline}
-                  </p>
-                </div>
-              </div>
-
-              {/* Bottom: Action trigger & scope */}
-              <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-mono">
-                  {tile.requiredPermission || "Public"}
-                </span>
-
-                {accessible && isActive ? (
-                  <span className="font-semibold text-indigo-600 group-hover:underline flex items-center">
-                    Launch App →
+                {/* Bottom: Action trigger & scope */}
+                <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-mono">
+                    {tile.requiredPermission || "Public"}
                   </span>
-                ) : (
-                  <span className="text-slate-400">Not Available</span>
-                )}
+
+                  {isActive ? (
+                    <span className="font-semibold text-indigo-600 group-hover:underline flex items-center">
+                      Launch App →
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 font-medium">In Development</span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
