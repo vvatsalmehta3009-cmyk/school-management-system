@@ -2,13 +2,14 @@ import csv
 from datetime import date, datetime
 import io
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import PasswordHasher, password_hasher
+from app.models.academic import AcademicYear, SchoolClass, Section
 from app.models.membership import SchoolMembership
 from app.models.rbac import Role, UserRole
-from app.models.student import Student
+from app.models.student import Student, StudentEnrollment
 from app.models.user import User
 from app.schemas.user import (
     BulkUploadResponse,
@@ -367,6 +368,8 @@ class UserService:
             phone = cleaned_row.get("phone") or cleaned_row.get("parent_phone") or None
             raw_pwd = cleaned_row.get("password")
             password = raw_pwd.strip() if (raw_pwd and raw_pwd.strip()) else generate_default_password(first_name)
+            class_name = cleaned_row.get("class_name") or cleaned_row.get("class") or cleaned_row.get("grade")
+            section_name = cleaned_row.get("section_name") or cleaned_row.get("section") or cleaned_row.get("stream")
 
             if not adm_no or not first_name:
                 errors.append(BulkUploadRowError(row_number=row_num, data=row, error="Missing required admission_number or first_name"))
@@ -443,6 +446,46 @@ class UserService:
                         status="active"
                     )
                     self.db.add(student)
+                    self.db.flush()
+
+                    # Auto-enroll into class section if provided
+                    if class_name and section_name:
+                        active_year = self.db.scalars(
+                            select(AcademicYear).where(
+                                AcademicYear.school_id == school_id,
+                                AcademicYear.is_current == True
+                            )
+                        ).first()
+                        if not active_year:
+                            active_year = self.db.scalars(
+                                select(AcademicYear).where(AcademicYear.school_id == school_id)
+                                .order_by(AcademicYear.start_date.desc())
+                            ).first()
+
+                        target_class = self.db.scalars(
+                            select(SchoolClass).where(
+                                SchoolClass.school_id == school_id,
+                                func.lower(SchoolClass.name) == class_name.lower()
+                            )
+                        ).first()
+
+                        if target_class and active_year:
+                            target_section = self.db.scalars(
+                                select(Section).where(
+                                    Section.class_id == target_class.id,
+                                    Section.academic_year_id == active_year.id,
+                                    func.lower(Section.name) == section_name.lower()
+                                )
+                            ).first()
+
+                            if target_section:
+                                enrollment = StudentEnrollment(
+                                    student_id=student.id,
+                                    section_id=target_section.id,
+                                    academic_year_id=active_year.id,
+                                    status="enrolled"
+                                )
+                                self.db.add(enrollment)
 
                 self.db.commit()
                 created_items.append(

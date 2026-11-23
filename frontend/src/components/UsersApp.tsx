@@ -168,10 +168,10 @@ Sunita Rao,sunita.rao@hmbschool.com,9876543212,Teacher,Teacher@123
 Kiran Shah,kiran.shah@hmbschool.com,9876543213,Principal,Principal@123`;
     } else {
       filename = "students_upload_sample.csv";
-      csvContent = `admission_number,first_name,last_name,date_of_birth,gender,blood_group,admission_date,email,phone,password
-ADM-2026-001,Aryan,Mehta,2010-05-14,male,B+,2026-06-01,aryan.mehta@example.com,9106245901,Student@123
-ADM-2026-002,Ananya,Iyer,2010-08-22,female,O+,2026-06-01,ananya.iyer@example.com,9106245902,Student@123
-ADM-2026-003,Rohan,Kapoor,2010-11-03,male,A+,2026-06-01,rohan.kapoor@example.com,9106245903,Student@123`;
+      csvContent = `admission_number,first_name,last_name,class_name,section_name,date_of_birth,gender,blood_group,admission_date,email,phone,password
+ADM-2026-001,Aryan,Mehta,Grade 11,COMMERCE,2010-05-14,male,B+,2026-06-01,aryan.mehta@example.com,9106245901,Aryan@123
+ADM-2026-002,Ananya,Iyer,Grade 11,SCIENCE,2010-08-22,female,O+,2026-06-01,ananya.iyer@example.com,9106245902,Ananya@123
+ADM-2026-003,Rohan,Kapoor,Grade 11,ARTS,2010-11-03,male,A+,2026-06-01,rohan.kapoor@example.com,9106245903,Rohan@123`;
     }
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
