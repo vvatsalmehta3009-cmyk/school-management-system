@@ -260,3 +260,34 @@ INSERT INTO role_permissions (role_id, permission_id) VALUES
 (6, 1), (6, 3), (6, 5), (6, 8),
 (7, 1), (7, 5), (7, 8)
 ON CONFLICT DO NOTHING;
+
+-- ==============================================================================
+-- 10. TEACHER COMPETENCIES & PROFILES
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS teacher_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    school_membership_id BIGINT NOT NULL UNIQUE REFERENCES school_memberships(id) ON DELETE CASCADE,
+    qualification VARCHAR(150),
+    designation VARCHAR(100),
+    experience_years INTEGER DEFAULT 0 NOT NULL,
+    gender VARCHAR(20),
+    address TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+    teacher_membership_id BIGINT NOT NULL REFERENCES school_memberships(id) ON DELETE CASCADE,
+    subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (teacher_membership_id, subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS teacher_classes (
+    teacher_membership_id BIGINT NOT NULL REFERENCES school_memberships(id) ON DELETE CASCADE,
+    class_id BIGINT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (teacher_membership_id, class_id)
+);
+

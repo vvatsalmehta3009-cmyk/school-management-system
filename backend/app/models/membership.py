@@ -1,7 +1,11 @@
+from typing import TYPE_CHECKING
 from datetime import datetime
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.teacher import TeacherProfile, TeacherSubject, TeacherClass
 
 
 class SchoolMembership(Base):
@@ -20,4 +24,8 @@ class SchoolMembership(Base):
     user: Mapped["User"] = relationship("User", back_populates="memberships")
     school: Mapped["School"] = relationship("School", back_populates="memberships")
     user_roles: Mapped[list["UserRole"]] = relationship("UserRole", back_populates="membership")
+    teacher_profile: Mapped["TeacherProfile | None"] = relationship("TeacherProfile", back_populates="membership", uselist=False, cascade="all, delete-orphan")
+    teacher_subjects: Mapped[list["TeacherSubject"]] = relationship("TeacherSubject", back_populates="membership", cascade="all, delete-orphan")
+    teacher_classes: Mapped[list["TeacherClass"]] = relationship("TeacherClass", back_populates="membership", cascade="all, delete-orphan")
+
 

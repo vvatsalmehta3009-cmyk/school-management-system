@@ -20,6 +20,25 @@ class UserCreateRequest(BaseModel):
     phone: str | None = Field(default=None, example="9876543210")
     password: str | None = Field(default=None, min_length=6, example="Priya@123", description="Defaults to Firstname@123 if left blank")
     role_ids: list[int] = Field(..., min_length=1, description="List of Role IDs to assign (e.g. [4] for Teacher)")
+    # Optional Teacher Profile & Competency fields
+    qualification: str | None = Field(default=None, max_length=150, example="M.Sc. Mathematics, B.Ed")
+    designation: str | None = Field(default=None, max_length=100, example="Senior Secondary Teacher")
+    experience_years: int = Field(default=0, ge=0, example=5)
+    gender: str | None = Field(default=None, max_length=20, example="Female")
+    address: str | None = Field(default=None, example="123 Academic Street")
+    subject_ids: list[int] = Field(default_factory=list, description="List of Subject IDs the teacher can teach")
+    class_ids: list[int] = Field(default_factory=list, description="List of Class (Grade) IDs the teacher can teach")
+
+
+class TeacherProfileUpdateRequest(BaseModel):
+    """Payload to update teacher competency and profile details."""
+    qualification: str | None = Field(default=None, max_length=150)
+    designation: str | None = Field(default=None, max_length=100)
+    experience_years: int = Field(default=0, ge=0)
+    gender: str | None = Field(default=None, max_length=20)
+    address: str | None = Field(default=None)
+    subject_ids: list[int] = Field(default_factory=list, description="List of qualified Subject IDs")
+    class_ids: list[int] = Field(default_factory=list, description="List of qualified Class/Grade IDs")
 
 
 class UserMemberResponse(BaseModel):
@@ -34,6 +53,14 @@ class UserMemberResponse(BaseModel):
     status: str
     roles: list[str]
     created_at: datetime
+    # Teacher Profile details (if applicable)
+    qualification: str | None = None
+    designation: str | None = None
+    experience_years: int | None = None
+    gender: str | None = None
+    address: str | None = None
+    subject_ids: list[int] = Field(default_factory=list)
+    class_ids: list[int] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

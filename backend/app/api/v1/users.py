@@ -8,6 +8,7 @@ from app.schemas.user import (
     AssignRoleRequest,
     BulkUploadResponse,
     RoleResponse,
+    TeacherProfileUpdateRequest,
     UserCreateRequest,
     UserMemberResponse,
 )
@@ -128,4 +129,25 @@ def assign_role(
         school_id=current_membership.school_id,
         membership_id=membership_id,
         role_id=data.role_id
+    )
+
+
+@router.put(
+    "/{membership_id}/teacher-profile",
+    response_model=UserMemberResponse,
+    summary="Update Teacher Competency Profile",
+    description="Updates teaching profile, qualifications, assigned subjects, and teaching grade levels.",
+    dependencies=[Depends(PermissionChecker("admin.manage", "teachers.manage"))]
+)
+def update_teacher_profile(
+    membership_id: int,
+    data: TeacherProfileUpdateRequest,
+    current_membership: Annotated[AuthenticatedMembership, Depends(get_current_membership)],
+    db: Annotated[Session, Depends(get_db)]
+) -> UserMemberResponse:
+    service = UserService(db)
+    return service.update_teacher_competency(
+        school_id=current_membership.school_id,
+        membership_id=membership_id,
+        data=data
     )

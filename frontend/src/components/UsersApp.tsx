@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api/client";
-import type { UserMember, RoleItem, UserProfile, BulkUploadResponse } from "../types";
+import type {
+  UserMember,
+  RoleItem,
+  UserProfile,
+  BulkUploadResponse,
+  SubjectItem,
+  ClassItem,
+  TeacherProfileUpdatePayload,
+} from "../types";
 import {
   Users,
   UserPlus,
@@ -16,6 +24,8 @@ import {
   Search,
   Shield,
   HelpCircle,
+  GraduationCap,
+  Briefcase,
 } from "lucide-react";
 
 interface UsersAppProps {
@@ -26,6 +36,8 @@ interface UsersAppProps {
 export const UsersApp: React.FC<UsersAppProps> = ({ user, onBack }) => {
   const [users, setUsers] = useState<UserMember[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
+  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -40,6 +52,25 @@ export const UsersApp: React.FC<UsersAppProps> = ({ user, onBack }) => {
     phone: "",
     password: "",
     role_ids: [] as number[],
+    qualification: "",
+    designation: "",
+    experience_years: 0,
+    gender: "",
+    address: "",
+    subject_ids: [] as number[],
+    class_ids: [] as number[],
+  });
+
+  // Edit Teacher Competency Modal
+  const [editingTeacher, setEditingTeacher] = useState<UserMember | null>(null);
+  const [teacherProfileForm, setTeacherProfileForm] = useState<TeacherProfileUpdatePayload>({
+    qualification: "",
+    designation: "",
+    experience_years: 0,
+    gender: "",
+    address: "",
+    subject_ids: [],
+    class_ids: [],
   });
 
   // Assign Role Modal
@@ -62,9 +93,17 @@ export const UsersApp: React.FC<UsersAppProps> = ({ user, onBack }) => {
     setLoading(true);
     setError(null);
     try {
-      const [uData, rData] = await Promise.all([api.getUsers(), api.getRoles()]);
+      const [uData, rData, sData, cData] = await Promise.all([
+        api.getUsers(),
+        api.getRoles(),
+        api.getSubjects().catch(() => []),
+        api.getClasses().catch(() => []),
+      ]);
       setUsers(uData);
       setRoles(rData);
+      setSubjects(sData);
+      setClasses(cData.sort((a, b) => a.display_order - b.display_order));
+
       if (rData.length > 0 && newUser.role_ids.length === 0) {
         const teacherRole = rData.find((r) => r.name === "Teacher") || rData[0];
         setNewUser((prev) => ({ ...prev, role_ids: [teacherRole.id] }));
@@ -95,6 +134,13 @@ export const UsersApp: React.FC<UsersAppProps> = ({ user, onBack }) => {
         phone: newUser.phone.trim() || undefined,
         password: newUser.password.trim() || undefined,
         role_ids: newUser.role_ids,
+        qualification: newUser.qualification.trim() || undefined,
+        designation: newUser.designation.trim() || undefined,
+        experience_years: Number(newUser.experience_years) || 0,
+        gender: newUser.gender || undefined,
+        address: newUser.address.trim() || undefined,
+        subject_ids: newUser.subject_ids,
+        class_ids: newUser.class_ids,
       });
 
       setSuccess(`User "${created.full_name}" registered! Generated Code: ${created.school_user_code}`);
@@ -105,10 +151,52 @@ export const UsersApp: React.FC<UsersAppProps> = ({ user, onBack }) => {
         phone: "",
         password: "",
         role_ids: roles.length > 0 ? [roles[0].id] : [],
+        qualification: "",
+        designation: "",
+        experience_years: 0,
+        gender: "",
+        address: "",
+        subject_ids: [],
+        class_ids: [],
       });
       loadData();
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleOpenEditTeacher = (u: UserMember) => {
+    setEditingTeacher(u);
+    setTeacherProfileForm({
+      qualification: u.qualification || "",
+      designation: u.designation || "",
+      experience_years: u.experience_years || 0,
+      gender: u.gender || "",
+      address: u.address || "",
+      subject_ids: u.subject_ids || [],
+      class_ids: u.class_ids || [],
+    });
+  };
+
+  const handleSaveTeacherProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeacher) return;
+    setError(null);
+    try {
+      await api.updateTeacherProfile(editingTeacher.membership_id, {
+        qualification: teacherProfileForm.qualification?.trim() || undefined,
+        designation: teacherProfileForm.designation?.trim() || undefined,
+        experience_years: Number(teacherProfileForm.experience_years) || 0,
+        gender: teacherProfileForm.gender || undefined,
+        address: teacherProfileForm.address?.trim() || undefined,
+        subject_ids: teacherProfileForm.subject_ids || [],
+        class_ids: teacherProfileForm.class_ids || [],
+      });
+      setSuccess(`Teacher competency profile for "${editingTeacher.full_name}" updated successfully.`);
+      setEditingTeacher(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.message || "Failed to update teacher profile.");
     }
   };
 
@@ -319,90 +407,151 @@ ADM-2026-003,Rohan,Kapoor,Grade 11,ARTS,2010-11-03,male,A+,2026-06-01,rohan.kapo
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                 <tr>
                   <th className="px-6 py-3.5">User Code (Login ID)</th>
-                  <th className="px-6 py-3.5">Full Name</th>
+                  <th className="px-6 py-3.5">Full Name & Profile</th>
                   <th className="px-6 py-3.5">Contact Details</th>
-                  <th className="px-6 py-3.5">Assigned Roles</th>
+                  <th className="px-6 py-3.5">Roles & Competencies</th>
                   <th className="px-6 py-3.5">Status</th>
                   {canManage && <th className="px-6 py-3.5 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map((u) => (
-                  <tr key={u.membership_id} className="hover:bg-slate-50/70 transition-colors">
-                    {/* Code */}
-                    <td className="px-6 py-4 font-mono font-bold text-indigo-700">
-                      <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100">
-                        {u.school_user_code}
-                      </span>
-                    </td>
+                {filteredUsers.map((u) => {
+                  const isTeacherStaff = u.roles.includes("Teacher") || u.roles.includes("Principal");
+                  const userSubjects = subjects.filter((s) => u.subject_ids?.includes(s.id));
+                  const userClasses = classes.filter((c) => u.class_ids?.includes(c.id));
 
-                    {/* Name */}
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
-                      <div className="text-[11px] text-slate-400">User ID #{u.user_id}</div>
-                    </td>
-
-                    {/* Contact */}
-                    <td className="px-6 py-4 text-slate-600">
-                      {u.email && (
-                        <div className="flex items-center space-x-1.5">
-                          <Mail className="w-3 h-3 text-slate-400" />
-                          <span>{u.email}</span>
-                        </div>
-                      )}
-                      {u.phone && (
-                        <div className="flex items-center space-x-1.5 mt-0.5">
-                          <Phone className="w-3 h-3 text-slate-400" />
-                          <span>{u.phone}</span>
-                        </div>
-                      )}
-                      {!u.email && !u.phone && <span className="text-slate-400 italic">No contact info</span>}
-                    </td>
-
-                    {/* Roles */}
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {u.roles.map((rName) => (
-                          <span
-                            key={rName}
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                              rName === "School Admin"
-                                ? "bg-purple-50 text-purple-700 border-purple-200"
-                                : rName === "Teacher"
-                                ? "bg-blue-50 text-blue-700 border-blue-200"
-                                : rName === "Accountant"
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : rName === "Principal"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-slate-100 text-slate-700 border-slate-200"
-                            }`}
-                          >
-                            {rName}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {u.status}
-                      </span>
-                    </td>
-
-                    {/* Actions (Admin Only) */}
-                    {canManage && (
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => setAssigningMember(u)}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          + Assign Role
-                        </button>
+                  return (
+                    <tr key={u.membership_id} className="hover:bg-slate-50/70 transition-colors">
+                      {/* Code */}
+                      <td className="px-6 py-4 font-mono font-bold text-indigo-700">
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100">
+                          {u.school_user_code}
+                        </span>
                       </td>
-                    )}
-                  </tr>
-                ))}
+
+                      {/* Name & Profile */}
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
+                        {(u.designation || u.qualification) && (
+                          <div className="text-[11px] text-slate-600 font-medium flex items-center space-x-1 mt-0.5">
+                            <Briefcase className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>
+                              {u.designation || u.qualification}
+                              {u.experience_years ? ` · ${u.experience_years} yrs exp` : ""}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400">User ID #{u.user_id}</div>
+                      </td>
+
+                      {/* Contact */}
+                      <td className="px-6 py-4 text-slate-600">
+                        {u.email && (
+                          <div className="flex items-center space-x-1.5">
+                            <Mail className="w-3 h-3 text-slate-400" />
+                            <span>{u.email}</span>
+                          </div>
+                        )}
+                        {u.phone && (
+                          <div className="flex items-center space-x-1.5 mt-0.5">
+                            <Phone className="w-3 h-3 text-slate-400" />
+                            <span>{u.phone}</span>
+                          </div>
+                        )}
+                        {!u.email && !u.phone && <span className="text-slate-400 italic">No contact info</span>}
+                      </td>
+
+                      {/* Roles & Competencies */}
+                      <td className="px-6 py-4">
+                        <div className="space-y-1.5">
+                          {/* Roles */}
+                          <div className="flex flex-wrap gap-1">
+                            {u.roles.map((rName) => (
+                              <span
+                                key={rName}
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                  rName === "School Admin"
+                                    ? "bg-purple-50 text-purple-700 border-purple-200"
+                                    : rName === "Teacher"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : rName === "Accountant"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : rName === "Principal"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                {rName}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Subjects & Classes pills if teacher */}
+                          {(userSubjects.length > 0 || userClasses.length > 0) && (
+                            <div className="pt-1 border-t border-slate-100 space-y-1">
+                              {userSubjects.length > 0 && (
+                                <div className="flex items-center space-x-1 flex-wrap gap-1">
+                                  <span className="text-[10px] font-semibold text-slate-400">Teaches:</span>
+                                  {userSubjects.map((s) => (
+                                    <span
+                                      key={s.id}
+                                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100"
+                                    >
+                                      {s.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {userClasses.length > 0 && (
+                                <div className="flex items-center space-x-1 flex-wrap gap-1">
+                                  <span className="text-[10px] font-semibold text-slate-400">Grades:</span>
+                                  {userClasses.map((c) => (
+                                    <span
+                                      key={c.id}
+                                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100"
+                                    >
+                                      {c.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {u.status}
+                        </span>
+                      </td>
+
+                      {/* Actions (Admin Only) */}
+                      {canManage && (
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            {isTeacherStaff && (
+                              <button
+                                onClick={() => handleOpenEditTeacher(u)}
+                                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Teacher Competencies & Profile"
+                              >
+                                Edit Profile
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setAssigningMember(u)}
+                              className="px-2.5 py-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              + Role
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -704,6 +853,174 @@ ADM-2026-003,Rohan,Kapoor,Grade 11,ARTS,2010-11-03,male,A+,2026-06-01,rohan.kapo
                 </div>
               </div>
 
+              {/* Teaching Competency & Staff Details (When Teacher or Principal role is chosen) */}
+              {newUser.role_ids.some((id) => {
+                const r = roles.find((x) => x.id === id);
+                return r && (r.name === "Teacher" || r.name === "Principal");
+              }) && (
+                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-3.5">
+                  <div className="flex items-center space-x-2 text-indigo-950 font-bold text-xs">
+                    <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Teaching Competencies & Staff Profile</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Academic Qualification
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. M.Sc. Physics, B.Ed"
+                        value={newUser.qualification}
+                        onChange={(e) => setNewUser({ ...newUser, qualification: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Designation / Title
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Senior Secondary Teacher"
+                        value={newUser.designation}
+                        onChange={(e) => setNewUser({ ...newUser, designation: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Experience (Years)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={60}
+                        value={newUser.experience_years}
+                        onChange={(e) =>
+                          setNewUser({ ...newUser, experience_years: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Gender
+                      </label>
+                      <select
+                        value={newUser.gender}
+                        onChange={(e) => setNewUser({ ...newUser, gender: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                      >
+                        <option value="">Select Gender (Optional)</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Residential Address
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Flat 302, Campus Staff Quarters"
+                      value={newUser.address}
+                      onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                    />
+                  </div>
+
+                  {/* Qualified Subjects Multi-Select Pills */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Qualified Subjects to Teach
+                      </label>
+                      <span className="text-[10px] text-slate-400">Click to toggle</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1.5 bg-white rounded-xl border border-slate-200">
+                      {subjects.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic p-1">No subjects created yet</span>
+                      ) : (
+                        subjects.map((s) => {
+                          const isSel = newUser.subject_ids.includes(s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                setNewUser((prev) => ({
+                                  ...prev,
+                                  subject_ids: isSel
+                                    ? prev.subject_ids.filter((id) => id !== s.id)
+                                    : [...prev.subject_ids, s.id],
+                                }));
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                isSel
+                                  ? "bg-indigo-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {s.name} ({s.code})
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Eligible Grade Levels Multi-Select Pills */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Eligible Grades / Classes
+                      </label>
+                      <span className="text-[10px] text-slate-400">Click to toggle</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1.5 bg-white rounded-xl border border-slate-200">
+                      {classes.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic p-1">No classes created yet</span>
+                      ) : (
+                        classes.map((c) => {
+                          const isSel = newUser.class_ids.includes(c.id);
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setNewUser((prev) => ({
+                                  ...prev,
+                                  class_ids: isSel
+                                    ? prev.class_ids.filter((id) => id !== c.id)
+                                    : [...prev.class_ids, c.id],
+                                }));
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                isSel
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {c.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4 flex justify-end space-x-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -762,6 +1079,232 @@ ADM-2026-003,Rohan,Kapoor,Grade 11,ARTS,2010-11-03,male,A+,2026-06-01,rohan.kapo
                   className="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm cursor-pointer"
                 >
                   Assign Role
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Teacher Profile & Competency */}
+      {editingTeacher && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shrink-0">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Edit Teacher Competencies</h3>
+                  <p className="text-xs text-slate-500">
+                    {editingTeacher.full_name} ·{" "}
+                    <span className="font-mono text-indigo-600 font-semibold">
+                      {editingTeacher.school_user_code}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTeacher(null)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTeacherProfile} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Academic Qualification
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. M.Sc. Physics, B.Ed"
+                    value={teacherProfileForm.qualification || ""}
+                    onChange={(e) =>
+                      setTeacherProfileForm({
+                        ...teacherProfileForm,
+                        qualification: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Designation / Title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Senior Secondary Lecturer"
+                    value={teacherProfileForm.designation || ""}
+                    onChange={(e) =>
+                      setTeacherProfileForm({
+                        ...teacherProfileForm,
+                        designation: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Teaching Experience (Years)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={teacherProfileForm.experience_years ?? 0}
+                    onChange={(e) =>
+                      setTeacherProfileForm({
+                        ...teacherProfileForm,
+                        experience_years: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Gender
+                  </label>
+                  <select
+                    value={teacherProfileForm.gender || ""}
+                    onChange={(e) =>
+                      setTeacherProfileForm({ ...teacherProfileForm, gender: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  >
+                    <option value="">Select Gender (Optional)</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Residential Address
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Flat 302, Campus Staff Quarters"
+                  value={teacherProfileForm.address || ""}
+                  onChange={(e) =>
+                    setTeacherProfileForm({ ...teacherProfileForm, address: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Qualified Subjects Multi-Select Pills */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-semibold text-slate-700">
+                    Qualified Subjects to Teach
+                  </label>
+                  <span className="text-[10px] text-slate-400">Click to select/deselect</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  {subjects.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No subjects available</span>
+                  ) : (
+                    subjects.map((s) => {
+                      const isSel = (teacherProfileForm.subject_ids || []).includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setTeacherProfileForm((prev) => {
+                              const current = prev.subject_ids || [];
+                              return {
+                                ...prev,
+                                subject_ids: isSel
+                                  ? current.filter((id) => id !== s.id)
+                                  : [...current, s.id],
+                              };
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            isSel
+                              ? "bg-indigo-600 text-white shadow-xs"
+                              : "bg-white text-slate-700 hover:bg-slate-200 border border-slate-200"
+                          }`}
+                        >
+                          {s.name} ({s.code})
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Eligible Grade Levels Multi-Select Pills */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-semibold text-slate-700">
+                    Eligible Grades / Classes
+                  </label>
+                  <span className="text-[10px] text-slate-400">Click to select/deselect</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  {classes.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">No classes available</span>
+                  ) : (
+                    classes.map((c) => {
+                      const isSel = (teacherProfileForm.class_ids || []).includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setTeacherProfileForm((prev) => {
+                              const current = prev.class_ids || [];
+                              return {
+                                ...prev,
+                                class_ids: isSel
+                                  ? current.filter((id) => id !== c.id)
+                                  : [...current, c.id],
+                              };
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            isSel
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-white text-slate-700 hover:bg-slate-200 border border-slate-200"
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingTeacher(null)}
+                  className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md cursor-pointer"
+                >
+                  Save Competencies
                 </button>
               </div>
             </form>

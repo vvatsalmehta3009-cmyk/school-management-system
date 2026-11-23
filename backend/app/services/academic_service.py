@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.academic import AcademicYear, SchoolClass, Section, Subject, SectionSubjectTeacher
 from app.models.membership import SchoolMembership
@@ -11,6 +11,7 @@ from app.schemas.academic import (
     ClassCreate,
     ClassUpdate,
     SectionCreate,
+    SectionResponse,
     SectionUpdate,
     SubjectCreate,
     SubjectUpdate,
@@ -282,17 +283,48 @@ class AcademicService:
     # Sections (Yearly Active Cohorts)
     # ------------------------------------------------------------------
 
+    def _to_section_response(self, sec: Section) -> SectionResponse:
+        teacher_name = None
+        teacher_code = None
+        if sec.class_teacher:
+            teacher_name = sec.class_teacher.user.full_name if sec.class_teacher.user else None
+            teacher_code = sec.class_teacher.school_user_code
+        elif sec.class_teacher_membership_id:
+            m = self.db.scalars(
+                select(SchoolMembership)
+                .where(SchoolMembership.id == sec.class_teacher_membership_id)
+                .options(selectinload(SchoolMembership.user))
+            ).first()
+            if m:
+                teacher_name = m.user.full_name if m.user else None
+                teacher_code = m.school_user_code
+
+        return SectionResponse(
+            id=sec.id,
+            academic_year_id=sec.academic_year_id,
+            class_id=sec.class_id,
+            name=sec.name,
+            capacity=sec.capacity,
+            class_teacher_membership_id=sec.class_teacher_membership_id,
+            class_teacher_name=teacher_name,
+            class_teacher_code=teacher_code,
+            created_at=sec.created_at,
+        )
+
     def list_sections(
         self,
         school_id: int,
         academic_year_id: int | None = None,
         class_id: int | None = None
-    ) -> list[Section]:
+    ) -> list[SectionResponse]:
         """List active sections in a school with optional year/class filters."""
         query = (
             select(Section)
             .join(SchoolClass, Section.class_id == SchoolClass.id)
             .where(SchoolClass.school_id == school_id)
+            .options(
+                selectinload(Section.class_teacher).selectinload(SchoolMembership.user)
+            )
         )
 
         if academic_year_id:
@@ -301,9 +333,10 @@ class AcademicService:
             query = query.where(Section.class_id == class_id)
 
         query = query.order_by(SchoolClass.display_order.asc(), Section.name.asc())
-        return list(self.db.scalars(query).all())
+        sections = list(self.db.scalars(query).all())
+        return [self._to_section_response(s) for s in sections]
 
-    def create_section(self, school_id: int, data: SectionCreate) -> Section:
+    def create_section(self, school_id: int, data: SectionCreate) -> SectionResponse:
         """
         Creates an active section for a specific class in an academic year.
         Enforces strict multi-tenant boundary checks.
@@ -377,9 +410,9 @@ class AcademicService:
         self.db.add(new_section)
         self.db.commit()
         self.db.refresh(new_section)
-        return new_section
+        return self._to_section_response(new_section)
 
-    def update_section(self, school_id: int, section_id: int, data: SectionUpdate) -> Section:
+    def update_section(self, school_id: int, section_id: int, data: SectionUpdate) -> SectionResponse:
         """Update an active cohort section."""
         sec = self.db.scalars(
             select(Section).where(Section.id == section_id)
@@ -439,7 +472,7 @@ class AcademicService:
 
         self.db.commit()
         self.db.refresh(sec)
-        return sec
+        return self._to_section_response(sec)
 
     def delete_section(self, school_id: int, section_id: int) -> dict:
         """Delete an active cohort section if no students are enrolled."""

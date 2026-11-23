@@ -11,6 +11,7 @@ import type {
   RoleItem,
   UserMember,
   CreateUserPayload,
+  TeacherProfileUpdatePayload,
   BulkUploadResponse,
   PlatformSchool,
 } from "../types";
@@ -297,6 +298,16 @@ class ApiClient {
     return this.request<UserMember>(`/users/${membership_id}/roles`, {
       method: "POST",
       body: JSON.stringify({ role_id }),
+    });
+  }
+
+  public async updateTeacherProfile(
+    membership_id: number,
+    data: TeacherProfileUpdatePayload
+  ): Promise<UserMember> {
+    return this.request<UserMember>(`/users/${membership_id}/teacher-profile`, {
+      method: "PUT",
+      body: JSON.stringify(data),
     });
   }
 

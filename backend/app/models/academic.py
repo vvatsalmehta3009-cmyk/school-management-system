@@ -51,6 +51,9 @@ class Section(Base):
     # Relationships
     academic_year: Mapped["AcademicYear"] = relationship("AcademicYear", back_populates="sections")
     school_class: Mapped["SchoolClass"] = relationship("SchoolClass", back_populates="sections")
+    class_teacher: Mapped["SchoolMembership | None"] = relationship(
+        "SchoolMembership", foreign_keys=[class_teacher_membership_id]
+    )
 
 
 class Subject(Base):

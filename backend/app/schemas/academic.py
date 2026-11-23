@@ -36,8 +36,13 @@ class SectionResponse(BaseModel):
     class_id: int
     name: str
     capacity: int | None
-    class_teacher_membership_id: int | None
+    class_teacher_membership_id: int | None = None
+    class_teacher_name: str | None = None
+    class_teacher_code: str | None = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
 
     class Config:
         from_attributes = True

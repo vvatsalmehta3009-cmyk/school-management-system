@@ -97,6 +97,8 @@ export interface SectionItem {
   name: string;
   capacity: number;
   class_teacher_membership_id?: number | null;
+  class_teacher_name?: string | null;
+  class_teacher_code?: string | null;
   created_at: string;
 }
 
@@ -127,6 +129,13 @@ export interface UserMember {
   status: string;
   roles: string[];
   created_at: string;
+  qualification?: string | null;
+  designation?: string | null;
+  experience_years?: number | null;
+  gender?: string | null;
+  address?: string | null;
+  subject_ids?: number[];
+  class_ids?: number[];
 }
 
 export interface CreateUserPayload {
@@ -135,6 +144,23 @@ export interface CreateUserPayload {
   phone?: string;
   password?: string;
   role_ids: number[];
+  qualification?: string;
+  designation?: string;
+  experience_years?: number;
+  gender?: string;
+  address?: string;
+  subject_ids?: number[];
+  class_ids?: number[];
+}
+
+export interface TeacherProfileUpdatePayload {
+  qualification?: string;
+  designation?: string;
+  experience_years?: number;
+  gender?: string;
+  address?: string;
+  subject_ids?: number[];
+  class_ids?: number[];
 }
 
 export interface BulkUploadResponse {

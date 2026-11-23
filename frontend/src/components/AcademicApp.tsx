@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api/client";
-import type { AcademicYear, ClassItem, SectionItem, SubjectItem, UserProfile } from "../types";
+import type { AcademicYear, ClassItem, SectionItem, SubjectItem, UserProfile, UserMember } from "../types";
 import {
   Calendar,
   Layers,
@@ -16,6 +16,8 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 
 export type AcademicSidebarTab = "sections-tree" | "classes-master" | "subjects" | "years";
@@ -41,6 +43,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [teachers, setTeachers] = useState<UserMember[]>([]);
   const [selectedYearId, setSelectedYearId] = useState<number>(0);
 
   const [loading, setLoading] = useState(false);
@@ -56,7 +59,11 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
 
   // Edit Modals
   const [editingSection, setEditingSection] = useState<SectionItem | null>(null);
-  const [editSectionForm, setEditSectionForm] = useState({ name: "", capacity: 40 });
+  const [editSectionForm, setEditSectionForm] = useState({
+    name: "",
+    capacity: 40,
+    class_teacher_membership_id: 0,
+  });
 
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
   const [editClassForm, setEditClassForm] = useState({ name: "", display_order: 1 });
@@ -80,6 +87,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
   const [newSection, setNewSection] = useState({
     name: "A",
     capacity: 40,
+    class_teacher_membership_id: 0,
   });
 
   const [newClass, setNewClass] = useState({
@@ -110,17 +118,19 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
     setLoading(true);
     setError(null);
     try {
-      const [yData, cData, sData, subData] = await Promise.all([
+      const [yData, cData, sData, subData, uData] = await Promise.all([
         api.getAcademicYears(),
         api.getClasses(),
         api.getSections(),
         api.getSubjects(),
+        api.getUsers().catch(() => []),
       ]);
 
       setYears(yData);
       setClasses(cData.sort((a, b) => a.display_order - b.display_order));
       setSections(sData);
       setSubjects(subData);
+      setTeachers(uData.filter((u: UserMember) => u.roles.includes("Teacher") || u.roles.includes("Principal")));
 
       // Default selected year to is_current or first year
       if (yData.length > 0 && !selectedYearId) {
@@ -141,7 +151,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
   // Creation Handlers
   const handleOpenAddSection = (cls: ClassItem) => {
     setTargetClassForSection(cls);
-    setNewSection({ name: "A", capacity: 40 });
+    setNewSection({ name: "A", capacity: 40, class_teacher_membership_id: 0 });
     setShowSectionModal(true);
   };
 
@@ -156,6 +166,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
         class_id: targetClassForSection.id,
         name: newSection.name.trim().toUpperCase(),
         capacity: newSection.capacity,
+        class_teacher_membership_id: newSection.class_teacher_membership_id ? Number(newSection.class_teacher_membership_id) : undefined,
       });
       setSuccess(`Section "${targetClassForSection.name} - ${newSection.name.trim().toUpperCase()}" created successfully.`);
       setShowSectionModal(false);
@@ -232,6 +243,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
     setEditSectionForm({
       name: sec.name,
       capacity: sec.capacity || 40,
+      class_teacher_membership_id: sec.class_teacher_membership_id || 0,
     });
   };
 
@@ -244,6 +256,7 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
       await api.updateSection(editingSection.id, {
         name: editSectionForm.name.trim().toUpperCase(),
         capacity: Number(editSectionForm.capacity),
+        class_teacher_membership_id: editSectionForm.class_teacher_membership_id ? Number(editSectionForm.class_teacher_membership_id) : 0,
       });
       setSuccess(`Section "${editSectionForm.name.trim().toUpperCase()}" updated successfully.`);
       setEditingSection(null);
@@ -689,8 +702,19 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                                       </div>
                                       <div className="flex items-center justify-between">
                                         <span className="text-slate-400">Class Teacher:</span>
-                                        <span className="font-medium text-slate-700">
-                                          {sec.class_teacher_membership_id ? `Teacher #${sec.class_teacher_membership_id}` : "Not assigned"}
+                                        <span className="font-medium">
+                                          {sec.class_teacher_name ? (
+                                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                              <UserCheck className="w-3 h-3 text-indigo-600 shrink-0" />
+                                              <span>{sec.class_teacher_name}</span>
+                                              <span className="text-[10px] text-indigo-500 font-mono">({sec.class_teacher_code})</span>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-400 border border-slate-200">
+                                              <UserX className="w-3 h-3 text-slate-400 shrink-0" />
+                                              <span>Unassigned</span>
+                                            </span>
+                                          )}
                                         </span>
                                       </div>
                                     </div>
@@ -1066,6 +1090,26 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                 />
               </div>
 
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Assign Class Teacher (Homeroom In-Charge)
+                </label>
+                <select
+                  value={newSection.class_teacher_membership_id}
+                  onChange={(e) =>
+                    setNewSection({ ...newSection, class_teacher_membership_id: Number(e.target.value) })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value={0}>None (Unassigned)</option>
+                  {teachers.map((t) => (
+                    <option key={t.membership_id} value={t.membership_id}>
+                      {t.full_name} ({t.school_user_code}) {t.designation ? `· ${t.designation}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -1130,6 +1174,29 @@ export const AcademicApp: React.FC<AcademicAppProps> = ({ user, onBack, initialT
                   }
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Assign Class Teacher (Homeroom In-Charge)
+                </label>
+                <select
+                  value={editSectionForm.class_teacher_membership_id}
+                  onChange={(e) =>
+                    setEditSectionForm({
+                      ...editSectionForm,
+                      class_teacher_membership_id: Number(e.target.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value={0}>None (Unassigned)</option>
+                  {teachers.map((t) => (
+                    <option key={t.membership_id} value={t.membership_id}>
+                      {t.full_name} ({t.school_user_code}) {t.designation ? `· ${t.designation}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="pt-2 flex justify-end space-x-2 border-t border-slate-100">

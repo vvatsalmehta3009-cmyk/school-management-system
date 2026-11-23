@@ -6,16 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import PasswordHasher, password_hasher
-from app.models.academic import AcademicYear, SchoolClass, Section
+from app.models.academic import AcademicYear, SchoolClass, Section, Subject
 from app.models.membership import SchoolMembership
 from app.models.rbac import Role, UserRole
 from app.models.student import Student, StudentEnrollment
+from app.models.teacher import TeacherClass, TeacherProfile, TeacherSubject
 from app.models.user import User
 from app.schemas.user import (
     BulkUploadResponse,
     BulkUploadResultItem,
     BulkUploadRowError,
     RoleResponse,
+    TeacherProfileUpdateRequest,
     UserCreateRequest,
     UserMemberResponse,
 )
@@ -45,37 +47,47 @@ class UserService:
         roles = self.db.scalars(select(Role).order_by(Role.id)).all()
         return [RoleResponse.model_validate(r) for r in roles]
 
+    def _to_member_response(self, m: SchoolMembership) -> UserMemberResponse:
+        role_names = [ur.role.name for ur in m.user_roles if ur.role]
+        tp = m.teacher_profile
+        subject_ids = [ts.subject_id for ts in m.teacher_subjects] if m.teacher_subjects else []
+        class_ids = [tc.class_id for tc in m.teacher_classes] if m.teacher_classes else []
+        return UserMemberResponse(
+            membership_id=m.id,
+            user_id=m.user.id,
+            school_id=m.school_id,
+            school_user_code=m.school_user_code or f"USER_{m.id}",
+            full_name=m.user.full_name,
+            email=m.user.email,
+            phone=m.user.phone,
+            status=m.status,
+            roles=role_names,
+            created_at=m.created_at,
+            qualification=tp.qualification if tp else None,
+            designation=tp.designation if tp else None,
+            experience_years=tp.experience_years if tp else None,
+            gender=tp.gender if tp else None,
+            address=tp.address if tp else None,
+            subject_ids=subject_ids,
+            class_ids=class_ids,
+        )
+
     def list_school_users(self, school_id: int) -> list[UserMemberResponse]:
-        """Fetch all member accounts registered under the specified school."""
+        """Fetch all member accounts registered under the specified school with teacher profiles."""
         query = (
             select(SchoolMembership)
             .where(SchoolMembership.school_id == school_id)
             .options(
                 selectinload(SchoolMembership.user),
-                selectinload(SchoolMembership.user_roles).selectinload(UserRole.role)
+                selectinload(SchoolMembership.user_roles).selectinload(UserRole.role),
+                selectinload(SchoolMembership.teacher_profile),
+                selectinload(SchoolMembership.teacher_subjects),
+                selectinload(SchoolMembership.teacher_classes),
             )
             .order_by(SchoolMembership.id.asc())
         )
         memberships = self.db.scalars(query).all()
-
-        results: list[UserMemberResponse] = []
-        for m in memberships:
-            role_names = [ur.role.name for ur in m.user_roles if ur.role]
-            results.append(
-                UserMemberResponse(
-                    membership_id=m.id,
-                    user_id=m.user.id,
-                    school_id=m.school_id,
-                    school_user_code=m.school_user_code or f"USER_{m.id}",
-                    full_name=m.user.full_name,
-                    email=m.user.email,
-                    phone=m.user.phone,
-                    status=m.status,
-                    roles=role_names,
-                    created_at=m.created_at
-                )
-            )
-        return results
+        return [self._to_member_response(m) for m in memberships]
 
     def create_school_user(
         self,
@@ -149,6 +161,28 @@ class UserService:
                 self.db.add(user_role)
                 assigned_role_names.append(r.name)
 
+            # Persist Teacher Profile & Competencies if Teacher/Principal or profile data provided
+            is_teacher = any(r.name in ["Teacher", "Principal"] for r in roles)
+            has_competency = bool(
+                data.qualification or data.designation or data.experience_years
+                or data.gender or data.address or data.subject_ids or data.class_ids
+            )
+            created_profile = None
+            if is_teacher or has_competency:
+                created_profile = TeacherProfile(
+                    school_membership_id=membership.id,
+                    qualification=data.qualification.strip() if data.qualification else None,
+                    designation=data.designation.strip() if data.designation else ("Teacher" if is_teacher else None),
+                    experience_years=data.experience_years or 0,
+                    gender=data.gender.strip() if data.gender else None,
+                    address=data.address.strip() if data.address else None,
+                )
+                self.db.add(created_profile)
+                for sid in (data.subject_ids or []):
+                    self.db.add(TeacherSubject(teacher_membership_id=membership.id, subject_id=sid))
+                for cid in (data.class_ids or []):
+                    self.db.add(TeacherClass(teacher_membership_id=membership.id, class_id=cid))
+
             self.db.commit()
 
             return UserMemberResponse(
@@ -161,7 +195,14 @@ class UserService:
                 phone=user.phone,
                 status=membership.status,
                 roles=assigned_role_names,
-                created_at=membership.created_at
+                created_at=membership.created_at,
+                qualification=created_profile.qualification if created_profile else None,
+                designation=created_profile.designation if created_profile else None,
+                experience_years=created_profile.experience_years if created_profile else 0,
+                gender=created_profile.gender if created_profile else None,
+                address=created_profile.address if created_profile else None,
+                subject_ids=data.subject_ids or [],
+                class_ids=data.class_ids or [],
             )
 
         except HTTPException:
@@ -214,8 +255,129 @@ class UserService:
             self.db.add(user_role)
             self.db.commit()
 
-        # Return updated member
-        return self.list_school_users(school_id)[0]
+        # Refresh membership with all relations
+        membership = self.db.scalars(
+            select(SchoolMembership).where(
+                SchoolMembership.id == membership_id,
+                SchoolMembership.school_id == school_id
+            ).options(
+                selectinload(SchoolMembership.user),
+                selectinload(SchoolMembership.user_roles).selectinload(UserRole.role),
+                selectinload(SchoolMembership.teacher_profile),
+                selectinload(SchoolMembership.teacher_subjects),
+                selectinload(SchoolMembership.teacher_classes),
+            )
+        ).first()
+        return self._to_member_response(membership)
+
+    def update_teacher_competency(
+        self,
+        school_id: int,
+        membership_id: int,
+        data: TeacherProfileUpdateRequest,
+    ) -> UserMemberResponse:
+        """
+        Updates a teacher's profile (qualification, designation, experience, address, gender)
+        and teaching competencies (qualified subject IDs and grade level class IDs).
+        """
+        membership = self.db.scalars(
+            select(SchoolMembership)
+            .where(
+                SchoolMembership.id == membership_id,
+                SchoolMembership.school_id == school_id
+            )
+            .options(
+                selectinload(SchoolMembership.user),
+                selectinload(SchoolMembership.user_roles).selectinload(UserRole.role),
+                selectinload(SchoolMembership.teacher_profile),
+                selectinload(SchoolMembership.teacher_subjects),
+                selectinload(SchoolMembership.teacher_classes),
+            )
+        ).first()
+
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Staff member with ID {membership_id} not found in your school."
+            )
+
+        # 1. Update or create TeacherProfile
+        if not membership.teacher_profile:
+            profile = TeacherProfile(
+                school_membership_id=membership.id,
+                qualification=data.qualification.strip() if data.qualification else None,
+                designation=data.designation.strip() if data.designation else None,
+                experience_years=data.experience_years or 0,
+                gender=data.gender.strip() if data.gender else None,
+                address=data.address.strip() if data.address else None,
+            )
+            self.db.add(profile)
+        else:
+            profile = membership.teacher_profile
+            profile.qualification = data.qualification.strip() if data.qualification else None
+            profile.designation = data.designation.strip() if data.designation else None
+            profile.experience_years = data.experience_years if data.experience_years is not None else 0
+            profile.gender = data.gender.strip() if data.gender else None
+            profile.address = data.address.strip() if data.address else None
+            profile.updated_at = datetime.utcnow()
+
+        # 2. Update TeacherSubject associations
+        valid_subject_ids: set[int] = set()
+        if data.subject_ids:
+            valid_subject_ids = set(
+                self.db.scalars(
+                    select(Subject.id).where(
+                        Subject.id.in_(data.subject_ids),
+                        Subject.school_id == school_id
+                    )
+                ).all()
+            )
+
+        for ts in list(membership.teacher_subjects):
+            self.db.delete(ts)
+        self.db.flush()
+
+        for sid in valid_subject_ids:
+            self.db.add(TeacherSubject(teacher_membership_id=membership.id, subject_id=sid))
+
+        # 3. Update TeacherClass associations
+        valid_class_ids: set[int] = set()
+        if data.class_ids:
+            valid_class_ids = set(
+                self.db.scalars(
+                    select(SchoolClass.id).where(
+                        SchoolClass.id.in_(data.class_ids),
+                        SchoolClass.school_id == school_id
+                    )
+                ).all()
+            )
+
+        for tc in list(membership.teacher_classes):
+            self.db.delete(tc)
+        self.db.flush()
+
+        for cid in valid_class_ids:
+            self.db.add(TeacherClass(teacher_membership_id=membership.id, class_id=cid))
+
+        self.db.commit()
+
+        # Reload membership with relations and return
+        membership = self.db.scalars(
+            select(SchoolMembership)
+            .where(
+                SchoolMembership.id == membership_id,
+                SchoolMembership.school_id == school_id
+            )
+            .options(
+                selectinload(SchoolMembership.user),
+                selectinload(SchoolMembership.user_roles).selectinload(UserRole.role),
+                selectinload(SchoolMembership.teacher_profile),
+                selectinload(SchoolMembership.teacher_subjects),
+                selectinload(SchoolMembership.teacher_classes),
+            )
+        ).first()
+
+        return self._to_member_response(membership)
 
     def bulk_upload_staff(
         self,
